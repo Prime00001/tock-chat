@@ -1,28 +1,60 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="bn">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tock - Realtime Chat</title>
+  <title>Tock Chat</title>
   <link rel="stylesheet" href="style.css">
+  
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 </head>
 <body>
-<button id="theme-toggle" class="theme-toggle" aria-label="Toggle Theme">
-  <span class="icon">☀️</span>
-</button>
-  <div class="chat-container">
-    <h2>Tock Chat</h2>
-    <div id="chat-box" class="chat-box"></div>
+
+  <button id="theme-toggle" class="theme-toggle" aria-label="Toggle Theme">
+    <span class="icon">☀️</span>
+  </button>
+
+  <!-- Login Section -->
+  <div id="auth-container" class="chat-container">
+    <h2>Tock-এ লগইন করুন</h2>
     <div class="input-area">
-      <input type="text" id="username" placeholder="Your Name...">
-      <input type="text" id="message" placeholder="Type a message...">
+      <div id="phone-step">
+        <input type="text" id="auth-username" placeholder="আপনার নাম" />
+        <input type="tel" id="auth-phone" placeholder="+88017XXXXXXXX" />
+        <div id="recaptcha-container"></div>
+        <button onclick="sendOTP()">OTP কোড পাঠান</button>
+      </div>
+
+      <div id="otp-step" style="display: none;">
+        <input type="number" id="auth-otp" placeholder="৬ ডিজিটের OTP" />
+        <button onclick="verifyOTP()">ভেরিফাই করুন</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat Section (Default Hidden) -->
+  <div id="chat-container" class="chat-container" style="display: none;">
+    <div style="display:flex; justify-content:space-between; align-items:center; background:#0084ff; padding:10px 15px; color:#fff;">
+      <h3 id="current-chat-title" style="margin:0;">Tock Chat</h3>
+      <button onclick="logOut()" style="width:auto; padding:5px 10px; font-size:12px; background:#ef4444;">Logout</button>
+    </div>
+    
+    <div style="padding:10px; background:var(--bubble-bg); display:flex; gap:5px;">
+      <input type="tel" id="search-phone" placeholder="বন্ধুর নম্বর (+88017...)" style="flex:1; padding:8px;" />
+      <button onclick="searchAndStartChat()" style="width:auto; padding:8px 12px;">Search</button>
+    </div>
+
+    <div id="chat-box" class="chat-box"></div>
+    
+    <div class="input-area">
+      <input type="text" id="message" placeholder="Type a message..." />
       <button onclick="sendMessage()">Send</button>
     </div>
   </div>
 
-  <!-- Firebase Scripts -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
