@@ -1,183 +1,359 @@
-// ১. Firebase Configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyDsS9YG4esj-PT3iBzzW3__98pwxdCtZvg",
-  authDomain: "tock-1fd0e.firebaseapp.com",
-  databaseURL: "https://tock-1fd0e-default-rtdb.firebaseio.com",
-  projectId: "tock-1fd0e",
-  storageBucket: "tock-1fd0e.firebasestorage.app",
-  messagingSenderId: "704452309911",
-  appId: "1:704452309911:web:a8da0db3a31b57a00f4ad2"
-};
-
-// Initialize Firebase
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-}
-const database = firebase.database();
-
-let currentChatRoomId = null;
-
-// ২. reCAPTCHA Verifier সেটআপ
-window.onload = () => {
-  window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-    'size': 'invisible'
+// --- Service Worker Registration ---
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW Registration failed:', err));
   });
-};
+}
 
-// ৩. মোবাইলে OTP পাঠানোর ফাংশন
-function sendOTP() {
-  const phoneNumber = document.getElementById("auth-phone").value.trim();
-  const username = document.getElementById("auth-username").value.trim();
+// Global Variables
+let currentUser = null;
+let activePartnerPhone = null;
+let typingTimeout = null;
+let replyingToMsg = null;
+let confirmationResult = null;
 
-  if (!phoneNumber || !username) {
-    alert("অনুগ্রহ করে আপনার নাম এবং সঠিক ফোন নম্বর দিন!");
-    return;
+// --- 1. Universal Theme Toggle ---
+function toggleTheme() {
+  document.body.classList.toggle('dark-theme');
+  const isDark = document.body.classList.contains('dark-theme');
+  const themeBtn = document.getElementById('theme-toggle');
+
+  if (themeBtn) {
+    themeBtn.querySelector('.icon').innerText = isDark ? '🌙' : '☀️';
+  }
+  localStorage.setItem('tock-theme', isDark ? 'dark' : 'light');
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (localStorage.getItem('tock-theme') === 'dark') {
+    document.body.classList.add('dark-theme');
+    const themeBtn = document.getElementById('theme-toggle');
+    if (themeBtn) themeBtn.querySelector('.icon').innerText = '🌙';
   }
 
-  localStorage.setItem("tock_username", username);
+  // Enter Key Listener for Message Input
+  const msgInput = document.getElementById('message');
+  if (msgInput) {
+    msgInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+  }
+});
+
+// Setup Recaptcha
+window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+  'size': 'invisible'
+});
+
+// --- 2. Auth System (1 Phone = 1 Account) ---
+function sendOTP() {
+  const phoneNumber = document.getElementById('auth-phone').value;
   const appVerifier = window.recaptchaVerifier;
 
   firebase.auth().signInWithPhoneNumber(phoneNumber, appVerifier)
-    .then((confirmationResult) => {
-      window.confirmationResult = confirmationResult;
-      alert("আপনার মোবাইলে OTP কোড পাঠানো হয়েছে!");
-      
-      document.getElementById("phone-step").style.display = "none";
-      document.getElementById("otp-step").style.display = "block";
-    })
-    .catch((error) => {
-      alert("OTP পাঠাতে সমস্যা হয়েছে: " + error.message);
+    .then((result) => {
+      confirmationResult = result;
+      document.getElementById('phone-step').style.display = 'none';
+      document.getElementById('otp-step').style.display = 'block';
+      alert('OTP পাঠানো হয়েছে!');
+    }).catch((error) => {
+      alert('Error: ' + error.message);
     });
 }
 
-// ৪. OTP ভেরিফাই করে লগইন করার ফাংশন
 function verifyOTP() {
-  const code = document.getElementById("auth-otp").value.trim();
-
-  if (!code) {
-    alert("OTP কোডটি টাইপ করুন!");
-    return;
-  }
-
-  window.confirmationResult.confirm(code).then((result) => {
-    const user = result.user;
-    const username = localStorage.getItem("tock_username");
-
-    user.updateProfile({ displayName: username }).then(() => {
-      alert("অ্যাকাউন্ট সফলভাবে ভেরিফাইড হয়েছে!");
+  const code = document.getElementById('auth-otp').value;
+  confirmationResult.confirm(code).then((result) => {
+    currentUser = result.user;
+    const username = document.getElementById('auth-username').value || 'User';
+    
+    firebase.database().ref('users/' + currentUser.phoneNumber.replace('+', '')).set({
+      name: username,
+      phone: currentUser.phoneNumber
     });
 
+    initUserSession();
   }).catch((error) => {
-    alert("ভুল OTP কোড! আবার চেষ্টা করুন। " + error.message);
+    alert('ভুল OTP: ' + error.message);
   });
 }
 
-// ৫. লগআউট ফাংশন
-function logOut() {
-  firebase.auth().signOut().then(() => {
-    alert("লগআউট হয়েছে!");
-  });
-}
-
-// ৬. নম্বর দিয়ে বন্ধুকে খুঁজে ১-অন-১ প্রাইভেট চ্যাট রুম তৈরি
-function searchAndStartChat() {
-  const friendPhone = document.getElementById("search-phone").value.trim();
-  const currentUser = firebase.auth().currentUser;
-
-  if (!friendPhone) {
-    alert("বন্ধুর ফোন নম্বর লিখুন!");
-    return;
-  }
-
-  if (friendPhone === currentUser.phoneNumber) {
-    alert("নিজের নম্বরে চ্যাট করা যাবে না!");
-    return;
-  }
-
-  // ২টি ফোন নম্বর সাজিয়ে ইউনিক চ্যাট রুম আইডি তৈরি
-  const phoneNumbers = [currentUser.phoneNumber, friendPhone].sort();
-  currentChatRoomId = `chat_${phoneNumbers[0]}_${phoneNumbers[1]}`.replace(/\+/g, '');
-
-  document.getElementById("current-chat-title").textContent = `Chat: ${friendPhone}`;
-  loadPrivateMessages(currentChatRoomId);
-}
-
-// ৭. প্রাইভেট রুমের মেসেজ ডাটাবেজ থেকে লোড করা
-function loadPrivateMessages(roomId) {
-  const chatBox = document.getElementById("chat-box");
-  chatBox.innerHTML = ""; // আগের চ্যাট মুছে দেওয়া
-
-  database.ref(`private_chats/${roomId}`).off();
-  database.ref(`private_chats/${roomId}`).on("child_added", (snapshot) => {
-    const data = snapshot.val();
-    const currentUser = firebase.auth().currentUser;
-    const isMe = data.uid === currentUser.uid;
-
-    const msgDiv = document.createElement("div");
-    msgDiv.classList.add("msg-item");
-    if (isMe) msgDiv.classList.add("my-message");
-
-    msgDiv.innerHTML = `<strong>${data.username}</strong><br>${data.message} <div style="font-size:10px; opacity:0.7; text-align:right;">${data.time}</div>`;
-    chatBox.appendChild(msgDiv);
-    chatBox.scrollTop = chatBox.scrollHeight;
-  });
-}
-
-// ৮. ১-অন-১ প্রাইভেট মেসেজ সেন্ড করা
-function sendMessage() {
-  const user = firebase.auth().currentUser;
-  const messageInput = document.getElementById("message");
-  const message = messageInput.value.trim();
-
-  if (!user || message === "") return;
-  if (!currentChatRoomId) {
-    alert("আগে কোনো বন্ধু সার্চ করে চ্যাট রুম শুরু করুন!");
-    return;
-  }
-
-  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-  database.ref(`private_chats/${currentChatRoomId}`).push({
-    uid: user.uid,
-    username: user.displayName || user.phoneNumber,
-    message: message,
-    time: time,
-    timestamp: Date.now()
-  });
-
-  messageInput.value = "";
-}
-
-// ৯. Auth State লিসেনার
 firebase.auth().onAuthStateChanged((user) => {
-  const authContainer = document.getElementById("auth-container");
-  const chatContainer = document.getElementById("chat-container");
-
   if (user) {
-    authContainer.style.display = "none";
-    chatContainer.style.display = "flex";
+    currentUser = user;
+    initUserSession();
   } else {
-    authContainer.style.display = "flex";
-    chatContainer.style.display = "none";
+    setUserPresence(false);
+    document.getElementById('auth-container').style.display = 'flex';
+    document.getElementById('chat-container').style.display = 'none';
   }
 });
-// ১০. থিম টগল লজিক (Light / Dark Theme)
-const themeToggleBtn = document.getElementById("theme-toggle");
 
-if (themeToggleBtn) {
-  // আগের সেভ হওয়া থিম চেক করা
-  const currentTheme = localStorage.getItem("tock_theme");
-  if (currentTheme === "dark") {
-    document.body.classList.add("dark-theme");
-    themeToggleBtn.querySelector(".icon").textContent = "🌙";
+function initUserSession() {
+  document.getElementById('auth-container').style.display = 'none';
+  document.getElementById('chat-container').style.display = 'flex';
+  setUserPresence(true);
+  loadRecentChats();
+  loadContacts();
+}
+
+function logOut() {
+  setUserPresence(false);
+  firebase.auth().signOut().then(() => location.reload());
+}
+
+// --- 3. Presence System (Adaptive Active Dot) ---
+function setUserPresence(isOnline) {
+  if (!currentUser) return;
+  const cleanPhone = currentUser.phoneNumber.replace('+', '');
+  const userStatusRef = firebase.database().ref(`status/${cleanPhone}`);
+
+  if (isOnline) {
+    userStatusRef.set({ state: 'online', last_changed: Date.now() });
+    userStatusRef.onDisconnect().set({ state: 'offline', last_changed: Date.now() });
+  } else {
+    userStatusRef.set({ state: 'offline', last_changed: Date.now() });
+  }
+}
+
+function listenToPartnerStatus(partnerPhone) {
+  const cleanPartner = partnerPhone.replace('+', '');
+  const statusDot = document.getElementById('active-status-dot');
+
+  firebase.database().ref(`status/${cleanPartner}`).on('value', (snapshot) => {
+    const data = snapshot.val();
+    if (data && data.state === 'online') {
+      statusDot.classList.add('active');
+    } else {
+      statusDot.classList.remove('active');
+    }
+  });
+}
+
+// --- 4. Typing Indicator ---
+function handleTyping() {
+  if (!currentUser || !activePartnerPhone) return;
+  const cleanMyPhone = currentUser.phoneNumber.replace('+', '');
+  const cleanPartner = activePartnerPhone.replace('+', '');
+
+  firebase.database().ref(`typing/${cleanPartner}/${cleanMyPhone}`).set(true);
+
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => {
+    firebase.database().ref(`typing/${cleanPartner}/${cleanMyPhone}`).set(false);
+  }, 2000);
+}
+
+function listenToTyping(partnerPhone) {
+  if (!currentUser) return;
+  const cleanMyPhone = currentUser.phoneNumber.replace('+', '');
+  const cleanPartner = partnerPhone.replace('+', '');
+  const typingIndicator = document.getElementById('typing-indicator');
+
+  firebase.database().ref(`typing/${cleanMyPhone}/${cleanPartner}`).on('value', (snapshot) => {
+    if (snapshot.val() === true) {
+      typingIndicator.innerText = "Typing...";
+    } else {
+      typingIndicator.innerText = "";
+    }
+  });
+}
+
+// --- 5. Tabs & Search Filtering ---
+function switchTab(tabName) {
+  document.getElementById('btn-tab-chats').classList.remove('active');
+  document.getElementById('btn-tab-contacts').classList.remove('active');
+  document.getElementById('tab-chats').style.display = 'none';
+  document.getElementById('tab-contacts').style.display = 'none';
+
+  if (tabName === 'chats') {
+    document.getElementById('btn-tab-chats').classList.add('active');
+    document.getElementById('tab-chats').style.display = 'block';
+  } else {
+    document.getElementById('btn-tab-contacts').classList.add('active');
+    document.getElementById('tab-contacts').style.display = 'block';
+  }
+}
+
+function filterContacts() {
+  const query = document.getElementById('search-contact-input').value.toLowerCase();
+  const contactItems = document.querySelectorAll('#contacts-list .list-item');
+
+  contactItems.forEach(item => {
+    const text = item.innerText.toLowerCase();
+    item.style.display = text.includes(query) ? 'flex' : 'none';
+  });
+}
+
+// --- 6. Open Chat & Messaging Core ---
+function openChat(partnerPhone, partnerName = '') {
+  activePartnerPhone = partnerPhone;
+  document.getElementById('current-chat-title').innerText = partnerName || partnerPhone;
+  
+  listenToPartnerStatus(partnerPhone);
+  listenToTyping(partnerPhone);
+  loadMessages();
+}
+
+function sendMessage() {
+  const msgInput = document.getElementById('message');
+  const text = msgInput.value.trim();
+  if (!text || !activePartnerPhone || !currentUser) return;
+
+  const cleanMy = currentUser.phoneNumber.replace('+', '');
+  const cleanPartner = activePartnerPhone.replace('+', '');
+  const chatId = [cleanMy, cleanPartner].sort().join('_');
+
+  const msgData = {
+    sender: currentUser.phoneNumber,
+    text: text,
+    timestamp: Date.now(),
+    status: 'delivered' // Initial Status
+  };
+
+  if (replyingToMsg) {
+    msgData.replyTo = replyingToMsg;
+    replyingToMsg = null;
+    msgInput.placeholder = "মেসেজ লিখুন...";
   }
 
-  themeToggleBtn.addEventListener("click", () => {
-    document.body.classList.toggle("dark-theme");
-    const isDark = document.body.classList.contains("dark-theme");
-    
-    // আইকন ও লোকাল স্টোরেজ আপডেট
-    themeToggleBtn.querySelector(".icon").textContent = isDark ? "🌙" : "☀️";
-    localStorage.setItem("tock_theme", isDark ? "dark" : "light");
+  firebase.database().ref(`chats/${chatId}`).push(msgData);
+  saveToRecentChats(activePartnerPhone);
+
+  msgInput.value = '';
+  firebase.database().ref(`typing/${cleanPartner}/${cleanMy}`).set(false);
+}
+
+function setReply(sender, text) {
+  replyingToMsg = { sender, text };
+  const msgInput = document.getElementById('message');
+  msgInput.placeholder = `Replying: "${text.substring(0, 15)}..."`;
+  msgInput.focus();
+}
+
+// --- 7. Dynamic Time Limit Edit (15 min / 15 sec) ---
+function editMessage(msgKey, oldText, timestamp, isSeen) {
+  const timeElapsed = Date.now() - timestamp;
+  const allowedTime = isSeen ? (15 * 1000) : (15 * 60 * 1000);
+
+  if (timeElapsed > allowedTime) {
+    alert(isSeen ? "মেসেজটি দেখা হয়েছে! ১৫ সেকেন্ড পার হওয়ায় আর এডিট করা সম্ভব নয়।" : "১৫ মিনিট পার হয়ে গেছে! আর এডিট করা সম্ভব নয়।");
+    return;
+  }
+
+  const cleanMy = currentUser.phoneNumber.replace('+', '');
+  const cleanPartner = activePartnerPhone.replace('+', '');
+  const chatId = [cleanMy, cleanPartner].sort().join('_');
+
+  const newText = prompt("মেসেজ পরিবর্তন করুন:", oldText);
+  if (newText && newText.trim() !== "" && newText !== oldText) {
+    firebase.database().ref(`chats/${chatId}/${msgKey}`).update({
+      text: newText.trim() + " (edited)"
+    });
+  }
+}
+
+// --- 8. Load Messages with Tripartite Delivery Status ---
+function loadMessages() {
+  const cleanMy = currentUser.phoneNumber.replace('+', '');
+  const cleanPartner = activePartnerPhone.replace('+', '');
+  const chatId = [cleanMy, cleanPartner].sort().join('_');
+  const chatBox = document.getElementById('chat-box');
+
+  firebase.database().ref(`chats/${chatId}`).on('value', (snapshot) => {
+    chatBox.innerHTML = '';
+    const messages = snapshot.val();
+
+    if (messages) {
+      Object.keys(messages).forEach((key) => {
+        const msg = messages[key];
+        const isMe = msg.sender === currentUser.phoneNumber;
+
+        // Auto Mark as Seen
+        if (!isMe && msg.status !== 'seen') {
+          firebase.database().ref(`chats/${chatId}/${key}`).update({ status: 'seen' });
+        }
+
+        // Tripartite Status Logic
+        let statusHTML = '';
+        if (isMe) {
+          if (msg.status === 'seen') {
+            statusHTML = '<span class="msg-status-text">🗸🗸🗸 Seen</span>';
+          } else if (msg.status === 'sent') {
+            statusHTML = '<span class="msg-status-text">🗸🗸 Sent</span>';
+          } else {
+            statusHTML = '<span class="msg-status-text">🗸 Delivered</span>';
+          }
+        }
+
+        let replyHTML = msg.replyTo ? `<div style="font-size:10px; opacity:0.8; border-left:2px solid #007aff; padding-left:4px; margin-bottom:4px;"><b>${msg.replyTo.sender}:</b> ${msg.replyTo.text}</div>` : '';
+        let editBtn = isMe ? `<button style="padding:1px 4px; font-size:9px; margin-left:4px; cursor:pointer;" onclick="editMessage('${key}', '${msg.text.replace(" (edited)", "")}', ${msg.timestamp}, ${msg.status === 'seen'})">✏️</button>` : '';
+
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `msg-item ${isMe ? 'my-message' : ''}`;
+        msgDiv.innerHTML = `
+          ${replyHTML}
+          <span>${msg.text}</span>
+          ${statusHTML}
+          ${editBtn}
+          <button style="padding:1px 4px; font-size:9px; margin-left:2px; cursor:pointer;" onclick="setReply('${msg.sender}', '${msg.text}')">↩</button>
+        `;
+
+        chatBox.appendChild(msgDiv);
+      });
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+  });
+}
+
+// --- 9. Recent Chats & Contacts Data Sync ---
+function saveToRecentChats(partnerPhone) {
+  const cleanMy = currentUser.phoneNumber.replace('+', '');
+  const cleanPartner = partnerPhone.replace('+', '');
+
+  firebase.database().ref(`user_chats/${cleanMy}/${cleanPartner}`).set({ phone: partnerPhone, time: Date.now() });
+  firebase.database().ref(`user_chats/${cleanPartner}/${cleanMy}`).set({ phone: currentUser.phoneNumber, time: Date.now() });
+}
+
+function loadRecentChats() {
+  const cleanMy = currentUser.phoneNumber.replace('+', '');
+  const listDiv = document.getElementById('recent-chats-list');
+
+  firebase.database().ref(`user_chats/${cleanMy}`).on('value', (snapshot) => {
+    listDiv.innerHTML = '';
+    const chats = snapshot.val();
+    if (chats) {
+      Object.keys(chats).forEach((key) => {
+        const item = document.createElement('div');
+        item.className = 'list-item';
+        item.innerHTML = `<span>📱 ${chats[key].phone}</span>`;
+        item.onclick = () => openChat(chats[key].phone);
+        listDiv.appendChild(item);
+      });
+    } else {
+      listDiv.innerHTML = '<p style="font-size:12px; opacity:0.6;">কোনো সাম্প্রতিক চ্যাট নেই</p>';
+    }
+  });
+}
+
+function loadContacts() {
+  const cleanMy = currentUser.phoneNumber.replace('+', '');
+  const listDiv = document.getElementById('contacts-list');
+
+  firebase.database().ref(`users`).on('value', (snapshot) => {
+    listDiv.innerHTML = '';
+    const users = snapshot.val();
+    if (users) {
+      Object.keys(users).forEach((key) => {
+        const user = users[key];
+        if (user.phone !== currentUser.phoneNumber) {
+          const item = document.createElement('div');
+          item.className = 'list-item';
+          item.innerHTML = `<span>👤 <b>${user.name}</b> (${user.phone})</span>`;
+          item.onclick = () => openChat(user.phone, user.name);
+          listDiv.appendChild(item);
+        }
+      });
+    }
   });
 }

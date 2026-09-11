@@ -5,56 +5,88 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tock Chat</title>
   <link rel="stylesheet" href="style.css">
-  
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <link rel="manifest" href="manifest.json">
 </head>
 <body>
 
-  <button id="theme-toggle" class="theme-toggle" aria-label="Toggle Theme">
+  <!-- Global Theme Toggle Button -->
+  <button id="theme-toggle" type="button" class="theme-btn" onclick="toggleTheme()">
     <span class="icon">☀️</span>
   </button>
 
-  <!-- Login Section -->
-  <div id="auth-container" class="chat-container">
-    <h2>Tock-এ লগইন করুন</h2>
-    <div class="input-area">
-      <div id="phone-step">
-        <input type="text" id="auth-username" placeholder="আপনার নাম" />
-        <input type="tel" id="auth-phone" placeholder="+88017XXXXXXXX" />
+  <div class="app-container">
+    
+    <!-- AUTH CONTAINER (Login / OTP) -->
+    <div id="auth-container" class="neumorphic-card">
+      <h1 class="app-title">Tock</h1>
+      <h3 class="auth-header-text">Tock-এ লগইন করুন</h3>
+      
+      <div id="phone-step" class="input-group">
+        <input type="text" id="auth-username" class="neumorphic-input" placeholder="আপনার নাম">
+        <input type="tel" id="auth-phone" class="neumorphic-input" placeholder="+88017XXXXXXXX">
         <div id="recaptcha-container"></div>
-        <button onclick="sendOTP()">OTP কোড পাঠান</button>
+        <button onclick="sendOTP()" class="neumorphic-btn action-btn">OTP কোড পাঠান</button>
       </div>
 
-      <div id="otp-step" style="display: none;">
-        <input type="number" id="auth-otp" placeholder="৬ ডিজিটের OTP" />
-        <button onclick="verifyOTP()">ভেরিফাই করুন</button>
+      <div id="otp-step" class="input-group" style="display: none;">
+        <input type="number" id="auth-otp" class="neumorphic-input" placeholder="৬ ডিজিটের OTP দিন">
+        <button onclick="verifyOTP()" class="neumorphic-btn action-btn">লগইন করুন</button>
       </div>
     </div>
+
+    <!-- CHAT CONTAINER -->
+    <div id="chat-container" class="neumorphic-card" style="display: none;">
+      
+      <!-- Chat Header with Profile & Active Dot -->
+      <div class="chat-header">
+        <div class="header-profile-info">
+          <div class="avatar-wrapper">
+            <div class="avatar-icon">👤</div>
+            <span id="active-status-dot" class="status-dot"></span>
+          </div>
+          <div>
+            <h3 id="current-chat-title">Tock Chat</h3>
+            <span id="typing-indicator" class="typing-text"></span>
+          </div>
+        </div>
+        <button onclick="logOut()" class="neumorphic-btn logout-btn">🚪 Logout</button>
+      </div>
+
+      <!-- Tab Navigation Menu -->
+      <div class="tab-menu">
+        <button id="btn-tab-chats" class="tab-btn active" onclick="switchTab('chats')">চ্যাটস</button>
+        <button id="btn-tab-contacts" class="tab-btn" onclick="switchTab('contacts')">কনট্যাক্টস</button>
+      </div>
+
+      <!-- Tab 1: Recent Chats -->
+      <div id="tab-chats" class="tab-content active">
+        <div id="recent-chats-list" class="list-container"></div>
+      </div>
+
+      <!-- Tab 2: Saved Contacts & Search -->
+      <div id="tab-contacts" class="tab-content" style="display: none;">
+        <div class="search-box">
+          <input type="tel" id="search-contact-input" class="neumorphic-input" placeholder="নাম বা নম্বর দিয়ে খুঁজুন..." oninput="filterContacts()">
+        </div>
+        <div id="contacts-list" class="list-container"></div>
+      </div>
+
+      <!-- Chat Messages Display Area -->
+      <div id="chat-box" class="chat-box"></div>
+
+      <!-- Input Message Box -->
+      <div class="input-box">
+        <input type="text" id="message" class="neumorphic-input" placeholder="মেসেজ লিখুন..." oninput="handleTyping()">
+        <button onclick="sendMessage()" class="neumorphic-btn send-btn">Send</button>
+      </div>
+
+    </div>
+
   </div>
 
-  <!-- Chat Section (Default Hidden) -->
-  <div id="chat-container" class="chat-container" style="display: none;">
-    <div style="display:flex; justify-content:space-between; align-items:center; background:#0084ff; padding:10px 15px; color:#fff;">
-      <h3 id="current-chat-title" style="margin:0;">Tock Chat</h3>
-      <button onclick="logOut()" style="width:auto; padding:5px 10px; font-size:12px; background:#ef4444;">Logout</button>
-    </div>
-    
-    <div style="padding:10px; background:var(--bubble-bg); display:flex; gap:5px;">
-      <input type="tel" id="search-phone" placeholder="বন্ধুর নম্বর (+88017...)" style="flex:1; padding:8px;" />
-      <button onclick="searchAndStartChat()" style="width:auto; padding:8px 12px;">Search</button>
-    </div>
-
-    <div id="chat-box" class="chat-box"></div>
-    
-    <div class="input-area">
-      <input type="text" id="message" placeholder="Type a message..." />
-      <button onclick="sendMessage()">Send</button>
-    </div>
-  </div>
-
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

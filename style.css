@@ -1,209 +1,279 @@
-/* Google Font Import for a modern look */
-@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
-
-/* Basic reset to ensure consistent styling */
 * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-}
-
-/* Light Theme Variables */
-:root {
-    --bg-color: #f0f2f5;
-    --container-bg: #fff;
-    --text-color: #333;
-    --bubble-bg: #e9ecef;
-    --my-bubble-bg: #cfe2f3;
-    --input-bg: #fff;
-    --input-border: #ccc;
-    --btn-bg: #007bff;
-    --btn-text: #fff;
-    --theme-toggle-btn-bg: rgba(255, 255, 255, 0.7);
-    --theme-toggle-btn-text: #333;
-}
-
-/* Dark Theme Variables */
-body.dark-theme {
-    --bg-color: #1a1a1a;
-    --container-bg: #2d2d2d;
-    --text-color: #f1f1f1;
-    --bubble-bg: #3e3e3e;
-    --my-bubble-bg: #4a6c8a;
-    --input-bg: #3e3e3e;
-    --input-border: #555;
-    --btn-bg: #007bff;
-    --btn-text: #fff;
-    --theme-toggle-btn-bg: rgba(0, 0, 0, 0.7);
-    --theme-toggle-btn-text: #f1f1f1;
-}
-
-/* Animated Gradient Background */
-@keyframes gradientAnimation {
-    0% {
-        background-position: 0% 50%;
-    }
-    50% {
-        background-position: 100% 50%;
-    }
-    100% {
-        background-position: 0% 50%;
-    }
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
 body {
-    font-family: 'Roboto', sans-serif;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    padding: 15px;
-    background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
-    background-size: 400% 400%;
-    animation: gradientAnimation 15s ease infinite;
-    color: var(--text-color);
-}
-
-.chat-container {
-    width: 100%;
-    max-width: 400px;
-    height: 90vh;
-    max-height: 600px;
-    background: var(--container-bg);
-    border-radius: 15px;
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-h2 {
-    text-align: center;
-    color: #fff;
-    background-color: #007bff;
-    padding: 15px;
-    font-size: 1.2rem;
-    font-weight: 500;
-}
-
-.chat-box {
-    flex: 1;
-    padding: 15px;
-    overflow-y: auto;
-    background-color: rgba(255, 255, 255, 0.05); /* subtle overlay */
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-/* Custom scrollbar for better look */
-.chat-box::-webkit-scrollbar {
-    width: 6px;
-}
-.chat-box::-webkit-scrollbar-thumb {
-    background-color: rgba(0, 0, 0, 0.2);
-    border-radius: 10px;
-}
-body.dark-theme .chat-box::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.2);
-}
-
-.msg-item {
-    max-width: 80%;
-    padding: 8px 12px;
-    background: var(--bubble-bg);
-    border-radius: 10px 10px 10px 0;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-    word-wrap: break-word;
-    align-self: flex-start;
-}
-
-/* For your own messages, you need to add a class in JS */
-.msg-item.my-message {
-    background: var(--my-bubble-bg);
-    border-radius: 10px 10px 0 10px;
-    align-self: flex-end;
-}
-
-.msg-item strong {
-    display: block;
-    color: #007bff;
-    font-size: 0.9rem;
-    margin-bottom: 2px;
-}
-body.dark-theme .msg-item strong {
-    color: #4da3ff;
-}
-
-.input-area {
-    padding: 15px;
-    background: var(--container-bg);
-    border-top: 1px solid var(--input-border);
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-input {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid var(--input-border);
-    border-radius: 8px;
-    font-size: 1rem;
-    background-color: var(--input-bg);
-    color: var(--text-color);
-}
-input:focus {
-    outline: none;
-    border-color: #007bff;
-}
-
-button {
-    width: 100%;
-    padding: 10px;
-    background-color: var(--btn-bg);
-    color: var(--btn-text);
-    border: none;
-    border-radius: 8px;
-    font-size: 1rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-button:hover {
-    background-color: #0056b3;
-}
-
-/* Circle Icon Theme Toggle Button */
-.theme-toggle {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  width: 45px;
-  height: 45px;
-  border-radius: 50%;
-  border: 2px solid #555;
-  background-color: #222222; /* Light mode-এ ডার্ক ব্যাকগ্রাউন্ড (সূর্যের জন্য) */
-  cursor: pointer;
+  background-color: #e0e5ec;
+  color: #333;
   display: flex;
   justify-content: center;
   align-items: center;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
-  z-index: 100;
+  min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-.theme-toggle .icon {
-  font-size: 20px;
-  line-height: 1;
+/* Global Theme Switcher Button */
+.theme-btn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: #e0e5ec;
+  box-shadow: 6px 6px 12px #a3b1c6, -6px -6px 12px #ffffff;
+  transition: 0.3s ease;
 }
 
-/* Dark theme active হলে বাটনের ব্যাকগ্রাউন্ড ও বর্ডার পরিবর্তন */
-body.dark-theme .theme-toggle {
-  background-color: #f0f0f0; /* Dark mode-এ লাইট ব্যাকগ্রাউন্ড (চাঁদের জন্য) */
-  border-color: #ccc;
+.app-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
 }
 
-.theme-toggle:hover {
-  transform: scale(1.1);
+.neumorphic-card {
+  background: #e0e5ec;
+  border-radius: 24px;
+  box-shadow: 10px 10px 20px #a3b1c6, -10px -10px 20px #ffffff;
+  padding: 30px 20px;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+
+.app-title { font-size: 32px; font-weight: 800; color: #007aff; }
+.auth-header-text { font-size: 18px; font-weight: 600; color: #444; }
+
+.input-group {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.neumorphic-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  outline: none;
+  border-radius: 14px;
+  background: #e0e5ec;
+  box-shadow: inset 4px 4px 8px #a3b1c6, inset -4px -4px 8px #ffffff;
+  color: #333;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.neumorphic-btn {
+  border: none;
+  outline: none;
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.action-btn {
+  width: 100%;
+  padding: 14px;
+  background: #007aff;
+  color: white;
+  font-size: 16px;
+  box-shadow: 5px 5px 12px #a3b1c6, -5px -5px 12px #ffffff;
+}
+
+.logout-btn, .send-btn {
+  padding: 10px 16px;
+  background: #e0e5ec;
+  color: #333;
+  box-shadow: 4px 4px 8px #a3b1c6, -4px -4px 8px #ffffff;
+}
+
+/* Header & Active Circle Dot (Theme Adaptive) */
+.chat-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.header-profile-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar-wrapper {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #e0e5ec;
+  box-shadow: 3px 3px 6px #a3b1c6, -3px -3px 6px #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+/* Small Active Dot Indicator */
+.status-dot {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: none;
+}
+
+/* Light Theme: Circle is Dark */
+body:not(.dark-theme) .status-dot.active {
+  display: block;
+  background-color: #1a1d24;
+  box-shadow: 0 0 0 2px #e0e5ec;
+}
+
+/* Dark Theme: Circle is Light */
+body.dark-theme .status-dot.active {
+  display: block;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 2px #1a1d24;
+}
+
+.typing-text {
+  font-size: 11px;
+  color: #007aff;
+  font-style: italic;
+}
+
+/* Tab Navigation & Lists */
+.tab-menu {
+  width: 100%;
+  display: flex;
+  gap: 10px;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  border-radius: 10px;
+  background: #e0e5ec;
+  box-shadow: 3px 3px 6px #a3b1c6, -3px -3px 6px #ffffff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.tab-btn.active {
+  box-shadow: inset 3px 3px 6px #a3b1c6, inset -3px -3px 6px #ffffff;
+  color: #007aff;
+}
+
+.tab-content { width: 100%; }
+
+.list-container {
+  max-height: 130px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.list-item {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #e0e5ec;
+  box-shadow: 3px 3px 6px #a3b1c6, -3px -3px 6px #ffffff;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+/* Chat Box Area */
+.chat-box {
+  width: 100%;
+  height: 270px;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 16px;
+  background: #e0e5ec;
+  box-shadow: inset 4px 4px 8px #a3b1c6, inset -4px -4px 8px #ffffff;
+}
+
+.input-box {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+}
+
+.msg-item {
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  align-self: flex-start;
+  background: #e0e5ec;
+  box-shadow: 3px 3px 6px #a3b1c6, -3px -3px 6px #ffffff;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.msg-item.my-message {
+  align-self: flex-end;
+  background: #007aff;
+  color: white;
+}
+
+/* Delivery Status Marker Styling (Small Font Size) */
+.msg-status-text {
+  font-size: 8px;
+  margin-left: 6px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+/* --- Dark Theme Overrides --- */
+body.dark-theme { background-color: #1a1d24 !important; color: #ffffff !important; }
+
+body.dark-theme .neumorphic-card,
+body.dark-theme .avatar-wrapper,
+body.dark-theme .tab-btn,
+body.dark-theme .list-item,
+body.dark-theme .theme-btn,
+body.dark-theme .logout-btn,
+body.dark-theme .send-btn {
+  background: #1a1d24 !important;
+  box-shadow: 5px 5px 10px #121419, -5px -5px 10px #22262f !important;
+  color: #fff !important;
+}
+
+body.dark-theme .neumorphic-input,
+body.dark-theme .chat-box,
+body.dark-theme .tab-btn.active {
+  background: #1a1d24 !important;
+  box-shadow: inset 4px 4px 8px #121419, inset -4px -4px 8px #22262f !important;
+  color: #fff !important;
 }
