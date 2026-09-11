@@ -9,14 +9,13 @@
 </head>
 <body>
 
-  <!-- Global Theme Toggle Button -->
   <button id="theme-toggle" type="button" class="theme-btn" onclick="toggleTheme()">
     <span class="icon">☀️</span>
   </button>
 
   <div class="app-container">
     
-    <!-- AUTH CONTAINER (Login / OTP) -->
+    <!-- AUTH CONTAINER -->
     <div id="auth-container" class="neumorphic-card">
       <h1 class="app-title">Tock</h1>
       <h3 class="auth-header-text">Tock-এ লগইন করুন</h3>
@@ -34,26 +33,32 @@
       </div>
     </div>
 
-    <!-- CHAT CONTAINER -->
+    <!-- MAIN CHAT CONTAINER -->
     <div id="chat-container" class="neumorphic-card" style="display: none;">
       
-      <!-- Chat Header with Profile & Active Dot -->
+      <!-- Top Brand Logo Header -->
+      <div class="brand-logo-header">
+        <h1 class="brand-logo">Tock</h1>
+      </div>
+
+      <!-- App User Profile & Header -->
       <div class="chat-header">
         <div class="header-profile-info">
+          <button id="back-btn" class="neumorphic-btn back-btn" onclick="closeChat()" style="display: none;">⬅</button>
           <div class="avatar-wrapper">
             <div class="avatar-icon">👤</div>
             <span id="active-status-dot" class="status-dot"></span>
           </div>
           <div>
-            <h3 id="current-chat-title">Tock Chat</h3>
+            <h3 id="current-chat-title">User Name</h3>
             <span id="typing-indicator" class="typing-text"></span>
           </div>
         </div>
         <button onclick="logOut()" class="neumorphic-btn logout-btn">🚪 Logout</button>
       </div>
 
-      <!-- Tab Navigation Menu -->
-      <div class="tab-menu">
+      <!-- Contact / Recent Tab Navigation -->
+      <div id="navigation-tabs" class="tab-menu">
         <button id="btn-tab-chats" class="tab-btn active" onclick="switchTab('chats')">চ্যাটস</button>
         <button id="btn-tab-contacts" class="tab-btn" onclick="switchTab('contacts')">কনট্যাক্টস</button>
       </div>
@@ -63,21 +68,22 @@
         <div id="recent-chats-list" class="list-container"></div>
       </div>
 
-      <!-- Tab 2: Saved Contacts & Search -->
+      <!-- Tab 2: Contacts & 3D Search Button -->
       <div id="tab-contacts" class="tab-content" style="display: none;">
-        <div class="search-box">
-          <input type="tel" id="search-contact-input" class="neumorphic-input" placeholder="নাম বা নম্বর দিয়ে খুঁজুন..." oninput="filterContacts()">
+        <div class="search-box-wrapper">
+          <input type="text" id="search-contact-input" class="neumorphic-input" placeholder="নাম বা নম্বর দিয়ে খুঁজুন..." oninput="filterContacts()">
+          <button onclick="handleSearchSubmit()" class="neumorphic-btn 3d-search-btn">🔍</button>
         </div>
         <div id="contacts-list" class="list-container"></div>
       </div>
 
-      <!-- Chat Messages Display Area -->
-      <div id="chat-box" class="chat-box"></div>
-
-      <!-- Input Message Box -->
-      <div class="input-box">
-        <input type="text" id="message" class="neumorphic-input" placeholder="মেসেজ লিখুন..." oninput="handleTyping()">
-        <button onclick="sendMessage()" class="neumorphic-btn send-btn">Send</button>
+      <!-- Active Chat Display & Message Input Area (Conditionally Shown) -->
+      <div id="active-chat-section" style="display: none; width: 100%;">
+        <div id="chat-box" class="chat-box"></div>
+        <div class="input-box" style="margin-top: 10px;">
+          <input type="text" id="message" class="neumorphic-input" placeholder="মেসেজ লিখুন..." oninput="handleTyping()">
+          <button onclick="sendMessage()" class="neumorphic-btn send-btn">Send</button>
+        </div>
       </div>
 
     </div>
