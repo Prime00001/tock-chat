@@ -1,8 +1,16 @@
-// --- Service Worker Registration ---
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW Registration failed:', err));
-  });
+// --- Firebase Config & Initialization ---
+const firebaseConfig = {
+  apiKey: "AIzaSyDsS9YG4esj-PT3iBzzW3__98pwxdCtZvg",
+  authDomain: "tock-1fd0e.firebaseapp.com",
+  databaseURL: "https://tock-1fd0e-default-rtdb.firebaseio.com",
+  projectId: "tock-1fd0e",
+  storageBucket: "tock-1fd0e.firebasestorage.app",
+  messagingSenderId: "704452309911",
+  appId: "1:704452309911:web:a8da0db3a31b57a00f4ad2"
+};
+
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
 }
 
 // Global Variables
@@ -31,6 +39,11 @@ window.addEventListener('DOMContentLoaded', () => {
     if (themeBtn) themeBtn.querySelector('.icon').innerText = '🌙';
   }
 
+  // Setup Recaptcha
+  window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+    'size': 'invisible'
+  });
+
   // Enter Key Listener for Message Input
   const msgInput = document.getElementById('message');
   if (msgInput) {
@@ -40,14 +53,14 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// Setup Recaptcha
-window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-  'size': 'invisible'
-});
-
 // --- 2. Auth System (1 Phone = 1 Account) ---
 function sendOTP() {
   const phoneNumber = document.getElementById('auth-phone').value;
+  if (!phoneNumber) {
+    alert("অনুগ্রহ করে আপনার ফোন নম্বরটি লিখুন!");
+    return;
+  }
+
   const appVerifier = window.recaptchaVerifier;
 
   firebase.auth().signInWithPhoneNumber(phoneNumber, appVerifier)
@@ -58,11 +71,17 @@ function sendOTP() {
       alert('OTP পাঠানো হয়েছে!');
     }).catch((error) => {
       alert('Error: ' + error.message);
+      console.error("OTP Send Error:", error);
     });
 }
 
 function verifyOTP() {
   const code = document.getElementById('auth-otp').value;
+  if (!code) {
+    alert("অনুগ্রহ করে OTP কোড দিন!");
+    return;
+  }
+
   confirmationResult.confirm(code).then((result) => {
     currentUser = result.user;
     const username = document.getElementById('auth-username').value || 'User';
@@ -208,7 +227,7 @@ function sendMessage() {
     sender: currentUser.phoneNumber,
     text: text,
     timestamp: Date.now(),
-    status: 'delivered' // Initial Status
+    status: 'delivered'
   };
 
   if (replyingToMsg) {
