@@ -22,12 +22,12 @@ let selectedMsgText = "";
 let isEditing = false;
 let longPressTimer = null;
 
-// Render Recaptcha for Phone Auth
+// Render Invisible Recaptcha for Phone Auth
 window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
   'size': 'invisible'
 });
 
-// Theme Switcher
+// Theme Switcher Logic
 function toggleTheme() {
   document.body.classList.toggle("lite-theme");
   document.body.classList.toggle("dark-theme");
@@ -35,22 +35,35 @@ function toggleTheme() {
 document.getElementById("theme-btn").onclick = toggleTheme;
 document.getElementById("auth-theme-btn").onclick = toggleTheme;
 
-// --- PROBLEM 1 FIX: Strict Bangladeshi (+880) OTP Authentication ---
+// --- Flexible Bangladeshi (+880) OTP Authentication ---
 document.getElementById("send-otp-btn").onclick = () => {
   const name = document.getElementById("auth-name").value.trim();
-  const phone = document.getElementById("auth-phone").value.trim();
+  let phone = document.getElementById("auth-phone").value.trim();
 
-  // Validate Bangladesh standard mobile numbers
-  const bdPhoneRegex = /^\+8801[3-9]\d{8}$/;
   if (!name) return alert("Please enter your name!");
-  if (!bdPhoneRegex.test(phone)) return alert("Invalid Bangladesh number! Format must be +8801XXXXXXXXX");
+
+  // ইউজার 01XXXXXXXXX লিখলে স্বয়ংক্রিয়ভাবে +88 যুক্ত হবে
+  if (phone.startsWith("01")) {
+    phone = "+88" + phone;
+  } else if (phone.startsWith("8801")) {
+    phone = "+" + phone;
+  }
+
+  // স্পেস বা ড্যাশ তুলে ফেলা
+  phone = phone.replace(/[\s-]/g, "");
+
+  const bdPhoneRegex = /^\+8801[3-9]\d{8}$/;
+
+  if (!bdPhoneRegex.test(phone)) {
+    return alert("Invalid Bangladesh number! Examples:\n• +88017XXXXXXXX\n• 017XXXXXXXX");
+  }
 
   auth.signInWithPhoneNumber(phone, window.recaptchaVerifier)
     .then((result) => {
       confirmationResult = result;
       document.getElementById("phone-step").classList.add("hidden");
       document.getElementById("otp-step").classList.remove("hidden");
-      alert("OTP code has been sent to your mobile phone!");
+      alert("OTP code has been sent!");
     })
     .catch((error) => alert("Error sending OTP: " + error.message));
 };
@@ -58,7 +71,10 @@ document.getElementById("send-otp-btn").onclick = () => {
 document.getElementById("verify-otp-btn").onclick = () => {
   const otp = document.getElementById("auth-otp").value.trim();
   const name = document.getElementById("auth-name").value.trim();
-  const phone = document.getElementById("auth-phone").value.trim();
+  let phone = document.getElementById("auth-phone").value.trim();
+
+  if (phone.startsWith("01")) phone = "+88" + phone;
+  phone = phone.replace(/[\s-]/g, "");
 
   if (otp.length !== 6) return alert("Please enter a valid 6-digit OTP!");
 
@@ -66,7 +82,7 @@ document.getElementById("verify-otp-btn").onclick = () => {
     const uid = res.user.uid;
     currentUser = { id: uid, name: name, phone: phone, bio: "Hey there! I am using Tock." };
     
-    // Save User Data to Database
+    // Save User Data to Firebase Realtime Database
     db.ref(`users/${uid}`).set(currentUser).then(() => {
       initApp();
     });
@@ -81,7 +97,7 @@ function initApp() {
   loadContacts();
 }
 
-// Presence System
+// Presence System (.onDisconnect)
 function setupPresence() {
   const userStatusRef = db.ref(`status/${currentUser.id}`);
   db.ref(".info/connected").on("value", (snap) => {
@@ -90,7 +106,7 @@ function setupPresence() {
   });
 }
 
-// --- PROBLEM 2 FIX: Working Notifications & Real Invitations ---
+// Notifications & Real-Time Chat Invites
 function sendInvite(targetId) {
   db.ref(`invites/${targetId}/${currentUser.id}`).set({
     senderName: currentUser.name,
@@ -113,14 +129,13 @@ function listenNotifications() {
 
         const div = document.createElement("div");
         div.className = "menu-item";
-        div.style.justify = "space-between";
+        div.style.justifyContent = "space-between";
         div.innerHTML = `<span><strong>${inv.senderName}</strong> sent you a chat invite.</span>`;
         
         const acceptBtn = document.createElement("button");
         acceptBtn.className = "neumorphic-text-btn invited";
         acceptBtn.textContent = "Accept";
         acceptBtn.onclick = () => {
-          // Add to mutual contacts and remove notification
           db.ref(`contacts/${currentUser.id}/${senderId}`).set(true);
           db.ref(`contacts/${senderId}/${currentUser.id}`).set(true);
           db.ref(`invites/${currentUser.id}/${senderId}`).remove();
@@ -132,7 +147,7 @@ function listenNotifications() {
       });
     } else {
       badge.classList.remove("active");
-      notifList.innerHTML = "<p>No new notifications</p>";
+      notifList.innerHTML = "<p style='text-align:center; color:var(--text-muted);'>No new notifications</p>";
     }
   });
 }
@@ -140,7 +155,7 @@ function listenNotifications() {
 document.getElementById("notif-btn").onclick = () => document.getElementById("notif-modal").classList.remove("hidden");
 document.getElementById("close-notif-btn").onclick = () => document.getElementById("notif-modal").classList.add("hidden");
 
-// Contacts List Navigation & Real-time Buttons
+// Contacts List Render
 function loadContacts() {
   const panel = document.getElementById("list-panel");
   panel.innerHTML = "";
@@ -183,7 +198,7 @@ function loadContacts() {
   });
 }
 
-// --- PROBLEM 3 FIX: Profile Modal View & Edit ---
+// Profile Modal View & Edit
 document.getElementById("main-menu-btn").onclick = () => document.getElementById("main-menu-modal").classList.remove("hidden");
 document.getElementById("menu-my-profile").onclick = () => {
   document.getElementById("main-menu-modal").classList.add("hidden");
@@ -203,7 +218,7 @@ document.getElementById("save-profile-btn").onclick = () => {
 };
 document.getElementById("close-profile-btn").onclick = () => document.getElementById("edit-profile-modal").classList.add("hidden");
 
-// --- PROBLEM 4 FIX: Chat Interface & Long Press Floating Actions ---
+// Chat Interface & Floating Actions
 function openChat(partner) {
   activeChatPartner = partner;
   document.getElementById("chat-screen").classList.remove("hidden");
@@ -227,7 +242,7 @@ function renderMessage(msgKey, msg) {
   bubble.className = `msg-bubble ${isOwn ? "own" : "partner"}`;
   bubble.innerHTML = `<div>${msg.text}</div><div class="msg-footer"><span>${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span></div>`;
 
-  // Long press event (Mobile & Desktop mouse hold)
+  // Long press event for Floating Bar
   const handleHold = (e) => {
     longPressTimer = setTimeout(() => {
       selectedMsgId = msgKey;
@@ -252,7 +267,7 @@ function renderMessage(msgKey, msg) {
   container.scrollTop = container.scrollHeight;
 }
 
-// Floating Actions Binding
+// Floating Bar Action Listeners
 document.getElementById("act-reply").onclick = () => {
   document.getElementById("reply-preview-box").classList.remove("hidden");
   document.getElementById("reply-preview-text").textContent = `Replying: ${selectedMsgText}`;
@@ -275,7 +290,7 @@ document.getElementById("act-delete").onclick = () => {
 
 document.getElementById("cancel-reply-btn").onclick = () => document.getElementById("reply-preview-box").classList.add("hidden");
 
-// Message Send / Edit Trigger
+// Send / Edit Message Action
 document.getElementById("send-btn").onclick = () => {
   const input = document.getElementById("message-input");
   const text = input.value.trim();
@@ -299,3 +314,4 @@ document.getElementById("send-btn").onclick = () => {
 };
 
 document.getElementById("chat-back-btn").onclick = () => document.getElementById("chat-screen").classList.add("hidden");
+document.getElementById("menu-logout").onclick = () => location.reload();
