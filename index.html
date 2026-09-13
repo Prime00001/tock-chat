@@ -5,31 +5,41 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tock - Premium Neumorphic Chat</title>
   <link rel="stylesheet" href="style.css">
+  <!-- Firebase Core & Auth/Database SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
 <body class="dark-theme">
 
-  <!-- STEP 1: AUTH SCREEN (With Theme Toggle Button) -->
+  <!-- STEP 1: AUTH SCREEN WITH FIREBASE PHONE OTP -->
   <div id="auth-screen" class="auth-container">
     <div class="neumorphic-card auth-card">
       <div class="auth-header">
         <h1 class="logo">Tock</h1>
         <button class="icon-btn-svg" id="auth-theme-btn" title="Toggle Theme">☀️</button>
       </div>
-      <p class="subtitle">Enter credentials to continue</p>
-      <div class="input-group">
-        <input type="text" id="auth-name" placeholder="Your Name" class="neu-input">
-        <input type="tel" id="auth-phone" placeholder="Phone (+8801XXXXXXXXX)" class="neu-input">
+      <p class="subtitle">Enter +880 phone number to receive OTP</p>
+      
+      <!-- Step 1: Send OTP -->
+      <div id="phone-step" class="input-group">
+        <input type="text" id="auth-name" placeholder="Your Full Name" class="neu-input">
+        <input type="tel" id="auth-phone" placeholder="+8801XXXXXXXXX" class="neu-input">
+        <div id="recaptcha-container"></div>
+        <button id="send-otp-btn" class="neu-btn primary">Send OTP</button>
       </div>
-      <button id="login-btn" class="neu-btn primary">Login / Register</button>
+
+      <!-- Step 2: Verify OTP (Hidden by default) -->
+      <div id="otp-step" class="input-group hidden">
+        <input type="text" id="auth-otp" placeholder="Enter 6-digit OTP" class="neu-input">
+        <button id="verify-otp-btn" class="neu-btn primary">Verify & Login</button>
+      </div>
     </div>
   </div>
 
   <!-- STEP 2: MAIN APP CONTAINER -->
   <div id="app-container" class="app-container hidden">
-    <!-- Main Header -->
+    <!-- Header -->
     <header class="top-header">
       <h1 class="logo">Tock</h1>
       <div class="header-right">
@@ -57,7 +67,7 @@
       <button class="3d-search-btn-svg" id="search-btn">🔍</button>
     </div>
 
-    <!-- List View Panel -->
+    <!-- Main List Panel -->
     <div id="list-panel" class="list-panel"></div>
 
     <!-- Active Chat Window -->
@@ -74,22 +84,19 @@
         <button class="icon-btn-svg" id="chat-info-btn">ℹ️</button>
       </div>
 
-      <!-- Messenger Pinned Banner -->
       <div id="pinned-banner" class="pinned-banner hidden">
         <span>📌 Pinned: <span id="pinned-msg-text">...</span></span>
       </div>
 
-      <!-- Message List -->
       <div id="messages-container" class="messages-container"></div>
 
-      <!-- Floating Action Menu (0.8s Hold) -->
+      <!-- Floating Bar for Reply / Edit / 3Dot -->
       <div id="floating-action-bar" class="floating-action-bar hidden">
         <button id="act-reply" class="act-btn">↩️ Reply</button>
         <button id="act-edit" class="act-btn">✏️ Edit</button>
-        <button id="act-3dot" class="act-btn">⋮ More</button>
+        <button id="act-delete" class="act-btn">🗑️ Delete</button>
       </div>
 
-      <!-- Message Input Bar -->
       <div class="input-container">
         <div id="reply-preview-box" class="reply-preview-box hidden">
           <span id="reply-preview-text">Replying...</span>
@@ -102,48 +109,32 @@
       </div>
     </div>
 
-    <!-- Sub-page: Partner Profile -->
-    <div id="profile-subpage" class="subpage hidden">
-      <div class="subpage-header">
-        <button class="icon-btn-svg" id="profile-back-btn">⬅</button>
-        <h3>Profile Details</h3>
-      </div>
-      <div class="profile-content">
-        <div class="avatar-large" id="prof-avatar">U</div>
-        <h2 id="prof-name">User Name</h2>
-        <p id="prof-bio">Bio loading...</p>
-        <hr class="divider">
-        <div class="menu-item copy-num-item" id="prof-copy-num">
-          Phone: <span id="prof-phone" class="lite-blue-text">+8801XXXXXXX</span>
-          <small class="hint">(Hold 0.8s to copy)</small>
-        </div>
-        <div class="menu-item" id="prof-overview">Started: <span id="prof-overview-text">Loading...</span></div>
-        <div class="menu-item danger-text" id="prof-block">Block User</div>
+    <!-- Profile Edit Modal -->
+    <div id="edit-profile-modal" class="modal-overlay hidden">
+      <div class="modal-card neumorphic-card">
+        <h3>Edit Profile</h3>
+        <input type="text" id="edit-name-input" class="neu-input" placeholder="Name">
+        <input type="text" id="edit-bio-input" class="neu-input" placeholder="Bio">
+        <button id="save-profile-btn" class="neu-btn primary">Save Changes</button>
+        <button id="close-profile-btn" class="neu-btn">Close</button>
       </div>
     </div>
 
-    <!-- Universal Info Modal (ℹ️) -->
-    <div id="info-modal" class="modal-overlay hidden">
+    <!-- Notifications Modal -->
+    <div id="notif-modal" class="modal-overlay hidden">
       <div class="modal-card neumorphic-card">
-        <div class="menu-item copy-num-item" id="info-copy-num">
-          Phone: <span id="info-phone-text" class="lite-blue-text">+8801XXXXXXX</span>
-          <small class="hint">(Hold 0.8s to copy)</small>
-        </div>
-        <div class="menu-item" id="info-profile-link">👤 View Partner Profile</div>
-        <div class="menu-item" id="info-search-msg">🔍 Search in chat</div>
-        <div class="menu-item" id="info-mute-chat">🔕 Mute chat</div>
-        <div class="menu-item" id="info-clear-msg">🧹 Clear all messages</div>
-        <div class="menu-item" id="info-delete-contact">🗑️ Delete contact</div>
-        <div class="menu-item danger-text" id="info-block-user">Block</div>
+        <h3>Notifications & Invites</h3>
+        <div id="notif-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+        <button id="close-notif-btn" class="neu-btn">Close</button>
       </div>
     </div>
 
     <!-- Main Dropdown Modal -->
     <div id="main-menu-modal" class="modal-overlay hidden">
       <div class="modal-card neumorphic-card">
+        <div class="menu-item" id="menu-my-profile">👤 View / Edit My Profile</div>
         <div class="menu-item" id="menu-invites">📩 Chat Invites</div>
         <div class="menu-item" id="menu-logout">Logout</div>
-        <div class="menu-item danger-text" id="menu-delete-acc">Delete Account</div>
       </div>
     </div>
   </div>
