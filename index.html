@@ -9,17 +9,18 @@
 </head>
 <body>
 
-  <button id="theme-toggle" type="button" class="theme-btn" onclick="toggleTheme()">
-    <span class="icon">☀️</span>
-  </button>
-
   <div class="app-container">
     
-    <!-- AUTH CONTAINER -->
+    <!-- AUTH CONTAINER (Login Screen) -->
     <div id="auth-container" class="neumorphic-card">
-      <h1 class="app-title">Tock</h1>
+      <!-- Auth Header with Theme Toggle -->
+      <div class="top-header">
+        <h1 class="brand-logo">Tock</h1>
+        <button class="icon-btn" onclick="toggleTheme()" title="Toggle Theme">☀️</button>
+      </div>
       <h3 class="auth-header-text">Tock-এ লগইন করুন</h3>
       
+      <!-- Phone Step -->
       <div id="phone-step" class="input-group">
         <input type="text" id="auth-username" class="neumorphic-input" placeholder="আপনার নাম">
         <input type="tel" id="auth-phone" class="neumorphic-input" placeholder="+88017XXXXXXXX">
@@ -27,6 +28,7 @@
         <button onclick="sendOTP()" class="neumorphic-btn action-btn">OTP কোড পাঠান</button>
       </div>
 
+      <!-- OTP Step -->
       <div id="otp-step" class="input-group" style="display: none;">
         <input type="number" id="auth-otp" class="neumorphic-input" placeholder="৬ ডিজিটের OTP দিন">
         <button onclick="verifyOTP()" class="neumorphic-btn action-btn">লগইন করুন</button>
@@ -36,17 +38,30 @@
     <!-- MAIN CHAT CONTAINER -->
     <div id="chat-container" class="neumorphic-card" style="display: none;">
       
-      <!-- Top Brand Logo Header -->
-      <div class="brand-logo-header">
+      <!-- Top Brand Header -->
+      <div class="top-header">
         <h1 class="brand-logo">Tock</h1>
+        <div class="header-actions">
+          <button class="icon-btn" title="Notifications">🔔</button>
+          <button id="theme-toggle" class="icon-btn" onclick="toggleTheme()" title="Toggle Theme">☀️</button>
+          <button class="icon-btn" onclick="toggleMenu()" title="Menu">☰</button>
+        </div>
       </div>
 
-      <!-- App User Profile & Header -->
-      <div class="chat-header">
+      <!-- Menu Popup -->
+      <div id="main-menu" class="menu-popup" style="display: none;">
+        <div class="menu-item" onclick="openProfileEdit()">👤 Profile Details (Bio/Address/Notes)</div>
+        <div class="menu-item" onclick="viewInvites()">📩 Chat Invites</div>
+        <div class="menu-item" onclick="logOut()">🚪 Logout</div>
+        <div class="menu-item danger" onclick="deleteAccount()">🗑️ Delete Account</div>
+      </div>
+
+      <!-- Active Chat Header -->
+      <div id="chat-sub-header" class="chat-header" style="display: none;">
         <div class="header-profile-info">
-          <button id="back-btn" class="neumorphic-btn back-btn" onclick="closeChat()" style="display: none;">⬅</button>
+          <button id="back-btn" class="icon-btn back-btn" onclick="closeChat()">⬅</button>
           <div class="avatar-wrapper">
-            <div class="avatar-icon">👤</div>
+            <div id="partner-initial" class="avatar-initial">?</div>
             <span id="active-status-dot" class="status-dot"></span>
           </div>
           <div>
@@ -54,13 +69,25 @@
             <span id="typing-indicator" class="typing-text"></span>
           </div>
         </div>
-        <button onclick="logOut()" class="neumorphic-btn logout-btn">🚪 Logout</button>
+        <button class="icon-btn" onclick="showPartnerDetails()" title="Chat Info">ℹ️</button>
       </div>
 
-      <!-- Contact / Recent Tab Navigation -->
+      <!-- Pinned Message Banner -->
+      <div id="pinned-banner" class="pinned-banner" style="display: none;">
+        <span>📌 <span id="pinned-text"></span></span>
+        <button onclick="unpinMessage()" class="close-pin-btn">✖</button>
+      </div>
+
+      <!-- Navigation Tabs -->
       <div id="navigation-tabs" class="tab-menu">
         <button id="btn-tab-chats" class="tab-btn active" onclick="switchTab('chats')">চ্যাটস</button>
         <button id="btn-tab-contacts" class="tab-btn" onclick="switchTab('contacts')">কনট্যাক্টস</button>
+      </div>
+
+      <!-- Search Bar -->
+      <div id="search-wrapper" class="search-box-wrapper">
+        <input type="text" id="search-input" class="neumorphic-input" placeholder="নাম দিয়ে খুঁজুন..." oninput="handleSearch()">
+        <button class="neumorphic-btn 3d-search-btn">🔍</button>
       </div>
 
       <!-- Tab 1: Recent Chats -->
@@ -68,19 +95,15 @@
         <div id="recent-chats-list" class="list-container"></div>
       </div>
 
-      <!-- Tab 2: Contacts & 3D Search Button -->
+      <!-- Tab 2: Contacts -->
       <div id="tab-contacts" class="tab-content" style="display: none;">
-        <div class="search-box-wrapper">
-          <input type="text" id="search-contact-input" class="neumorphic-input" placeholder="নাম বা নম্বর দিয়ে খুঁজুন..." oninput="filterContacts()">
-          <button onclick="handleSearchSubmit()" class="neumorphic-btn 3d-search-btn">🔍</button>
-        </div>
         <div id="contacts-list" class="list-container"></div>
       </div>
 
-      <!-- Active Chat Display & Message Input Area (Conditionally Shown) -->
+      <!-- Active Chat Box Section -->
       <div id="active-chat-section" style="display: none; width: 100%;">
         <div id="chat-box" class="chat-box"></div>
-        <div class="input-box" style="margin-top: 10px;">
+        <div class="input-box">
           <input type="text" id="message" class="neumorphic-input" placeholder="মেসেজ লিখুন..." oninput="handleTyping()">
           <button onclick="sendMessage()" class="neumorphic-btn send-btn">Send</button>
         </div>
@@ -88,6 +111,20 @@
 
     </div>
 
+  </div>
+
+  <!-- Partner Info Modal -->
+  <div id="partner-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <h3>Chat Partner Details</h3>
+      <p><b>Name:</b> <span id="modal-name"></span></p>
+      <p><b>Phone:</b> <span id="modal-phone"></span></p>
+      <p><b>Bio:</b> <span id="modal-bio">Available</span></p>
+      <p><b>Address:</b> <span id="modal-address">N/A</span></p>
+      <hr>
+      <button class="action-btn danger" onclick="blockUser()">Block Partner</button>
+      <button class="action-btn" onclick="closeModal()">Close</button>
+    </div>
   </div>
 
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>

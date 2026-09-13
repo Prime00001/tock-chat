@@ -8,300 +8,79 @@ const firebaseConfig = {
   appId: "1:704452309911:web:a8da0db3a31b57a00f4ad2"
 };
 
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-}
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
 let currentUser = null;
 let currentProfileName = '';
 let activePartnerPhone = null;
-let typingTimeout = null;
-let replyingToMsg = null;
-let confirmationResult = null;
+let activePartnerName = '';
+let holdTimer = null;
 
 function toggleTheme() {
   document.body.classList.toggle('dark-theme');
-  const isDark = document.body.classList.contains('dark-theme');
-  const themeBtn = document.getElementById('theme-toggle');
-
-  if (themeBtn) {
-    themeBtn.querySelector('.icon').innerText = isDark ? '🌙' : '☀️';
-  }
-  localStorage.setItem('tock-theme', isDark ? 'dark' : 'light');
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  if (localStorage.getItem('tock-theme') === 'dark') {
-    document.body.classList.add('dark-theme');
-    const themeBtn = document.getElementById('theme-toggle');
-    if (themeBtn) themeBtn.querySelector('.icon').innerText = '🌙';
-  }
-
-  window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-    'size': 'invisible'
-  });
-
-  const searchInput = document.getElementById('search-contact-input');
-  if (searchInput) {
-    searchInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') handleSearchSubmit();
-    });
-  }
-});
-
-function sendOTP() {
-  const phoneNumber = document.getElementById('auth-phone').value;
-  if (!phoneNumber) {
-    alert("অনুগ্রহ করে আপনার ফোন নম্বরটি লিখুন!");
-    return;
-  }
-
-  firebase.auth().signInWithPhoneNumber(phoneNumber, window.recaptchaVerifier)
-    .then((result) => {
-      confirmationResult = result;
-      document.getElementById('phone-step').style.display = 'none';
-      document.getElementById('otp-step').style.display = 'block';
-      alert('OTP পাঠানো হয়েছে!');
-    }).catch((error) => {
-      alert('Error: ' + error.message);
-    });
-}
-
-function verifyOTP() {
-  const code = document.getElementById('auth-otp').value;
-  if (!code) {
-    alert("অনুগ্রহ করে OTP কোড দিন!");
-    return;
-  }
-
-  confirmationResult.confirm(code).then((result) => {
-    currentUser = result.user;
-    currentProfileName = document.getElementById('auth-username').value || 'User';
-    
-    firebase.database().ref('users/' + currentUser.phoneNumber.replace('+', '')).set({
-      name: currentProfileName,
-      phone: currentUser.phoneNumber
-    });
-
-    initUserSession();
-  }).catch((error) => {
-    alert('ভুল OTP: ' + error.message);
-  });
+function toggleMenu() {
+  const menu = document.getElementById('main-menu');
+  menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
 }
 
 firebase.auth().onAuthStateChanged((user) => {
   if (user) {
     currentUser = user;
     const cleanPhone = currentUser.phoneNumber.replace('+', '');
-    firebase.database().ref(`users/${cleanPhone}`).once('value', (snapshot) => {
-      const data = snapshot.val();
+    firebase.database().ref(`users/${cleanPhone}`).once('value', (snap) => {
+      const data = snap.val();
       currentProfileName = data ? data.name : 'User';
-      initUserSession();
+      initSession();
     });
   } else {
-    setUserPresence(false);
     document.getElementById('auth-container').style.display = 'flex';
     document.getElementById('chat-container').style.display = 'none';
   }
 });
 
-function initUserSession() {
+function initSession() {
   document.getElementById('auth-container').style.display = 'none';
   document.getElementById('chat-container').style.display = 'flex';
-  
-  // Display current user's name on Header initially
-  document.getElementById('current-chat-title').innerText = currentProfileName;
-  
-  setUserPresence(true);
   loadRecentChats();
   loadContacts();
 }
 
-function logOut() {
-  setUserPresence(false);
-  firebase.auth().signOut().then(() => location.reload());
+function switchTab(tab) {
+  document.getElementById('btn-tab-chats').classList.toggle('active', tab === 'chats');
+  document.getElementById('btn-tab-contacts').classList.toggle('active', tab === 'contacts');
+  document.getElementById('tab-chats').style.display = tab === 'chats' ? 'block' : 'none';
+  document.getElementById('tab-contacts').style.display = tab === 'contacts' ? 'block' : 'none';
 }
 
-function setUserPresence(isOnline) {
-  if (!currentUser) return;
-  const cleanPhone = currentUser.phoneNumber.replace('+', '');
-  const userStatusRef = firebase.database().ref(`status/${cleanPhone}`);
+function openChat(phone, name) {
+  activePartnerPhone = phone;
+  activePartnerName = name || phone;
 
-  if (isOnline) {
-    userStatusRef.set({ state: 'online', last_changed: Date.now() });
-    userStatusRef.onDisconnect().set({ state: 'offline', last_changed: Date.now() });
-  } else {
-    userStatusRef.set({ state: 'offline', last_changed: Date.now() });
-  }
-}
+  document.getElementById('current-chat-title').innerText = activePartnerName;
+  document.getElementById('partner-initial').innerText = activePartnerName.charAt(0).toUpperCase();
 
-function listenToPartnerStatus(partnerPhone) {
-  const cleanPartner = partnerPhone.replace('+', '');
-  const statusDot = document.getElementById('active-status-dot');
-
-  firebase.database().ref(`status/${cleanPartner}`).on('value', (snapshot) => {
-    const data = snapshot.val();
-    if (data && data.state === 'online') {
-      statusDot.classList.add('active');
-    } else {
-      statusDot.classList.remove('active');
-    }
-  });
-}
-
-function filterContacts() {
-  const query = document.getElementById('search-contact-input').value.toLowerCase().trim();
-  const contactItems = document.querySelectorAll('#contacts-list .list-item');
-
-  contactItems.forEach(item => {
-    const text = item.innerText.toLowerCase();
-    item.style.display = text.includes(query) ? 'flex' : 'none';
-  });
-}
-
-function handleSearchSubmit() {
-  const visibleContact = document.querySelector('#contacts-list .list-item[style*="display: flex"]');
-  if (visibleContact) {
-    visibleContact.click();
-  } else {
-    alert("কোনো কন্ট্যাক্ট পাওয়া যায়নি!");
-  }
-}
-
-function switchTab(tabName) {
-  document.getElementById('btn-tab-chats').classList.remove('active');
-  document.getElementById('btn-tab-contacts').classList.remove('active');
-  document.getElementById('tab-chats').style.display = 'none';
-  document.getElementById('tab-contacts').style.display = 'none';
-
-  if (tabName === 'chats') {
-    document.getElementById('btn-tab-chats').classList.add('active');
-    document.getElementById('tab-chats').style.display = 'block';
-  } else {
-    document.getElementById('btn-tab-contacts').classList.add('active');
-    document.getElementById('tab-contacts').style.display = 'block';
-  }
-}
-
-// Open Specific Chat (Shows Chat Box)
-function openChat(partnerPhone, partnerName = '') {
-  activePartnerPhone = partnerPhone;
-  document.getElementById('current-chat-title').innerText = partnerName || partnerPhone;
-  
-  // Hide Tabs and Show Chat Window
   document.getElementById('navigation-tabs').style.display = 'none';
+  document.getElementById('search-wrapper').style.display = 'none';
   document.getElementById('tab-chats').style.display = 'none';
   document.getElementById('tab-contacts').style.display = 'none';
+  
+  document.getElementById('chat-sub-header').style.display = 'flex';
   document.getElementById('active-chat-section').style.display = 'block';
-  document.getElementById('back-btn').style.display = 'inline-block';
 
-  listenToPartnerStatus(partnerPhone);
-  listenToTyping(partnerPhone);
   loadMessages();
+  listenToPinnedMessage();
 }
 
-// Close Chat (Back to Contact/Chats List)
 function closeChat() {
   activePartnerPhone = null;
-  document.getElementById('current-chat-title').innerText = currentProfileName;
-  document.getElementById('active-status-dot').classList.remove('active');
-  
-  // Show Navigation Tabs & Hide Chat Box
-  document.getElementById('navigation-tabs').style.display = 'flex';
+  document.getElementById('chat-sub-header').style.display = 'none';
   document.getElementById('active-chat-section').style.display = 'none';
-  document.getElementById('back-btn').style.display = 'none';
-
-  const activeTab = document.querySelector('.tab-btn.active').id;
-  if (activeTab === 'btn-tab-chats') {
-    document.getElementById('tab-chats').style.display = 'block';
-  } else {
-    document.getElementById('tab-contacts').style.display = 'block';
-  }
-}
-
-function handleTyping() {
-  if (!currentUser || !activePartnerPhone) return;
-  const cleanMyPhone = currentUser.phoneNumber.replace('+', '');
-  const cleanPartner = activePartnerPhone.replace('+', '');
-
-  firebase.database().ref(`typing/${cleanPartner}/${cleanMyPhone}`).set(true);
-
-  clearTimeout(typingTimeout);
-  typingTimeout = setTimeout(() => {
-    firebase.database().ref(`typing/${cleanPartner}/${cleanMyPhone}`).set(false);
-  }, 2000);
-}
-
-function listenToTyping(partnerPhone) {
-  if (!currentUser) return;
-  const cleanMyPhone = currentUser.phoneNumber.replace('+', '');
-  const cleanPartner = partnerPhone.replace('+', '');
-  const typingIndicator = document.getElementById('typing-indicator');
-
-  firebase.database().ref(`typing/${cleanMyPhone}/${cleanPartner}`).on('value', (snapshot) => {
-    if (snapshot.val() === true) {
-      typingIndicator.innerText = "Typing...";
-    } else {
-      typingIndicator.innerText = "";
-    }
-  });
-}
-
-function sendMessage() {
-  const msgInput = document.getElementById('message');
-  const text = msgInput.value.trim();
-  if (!text || !activePartnerPhone || !currentUser) return;
-
-  const cleanMy = currentUser.phoneNumber.replace('+', '');
-  const cleanPartner = activePartnerPhone.replace('+', '');
-  const chatId = [cleanMy, cleanPartner].sort().join('_');
-
-  const msgData = {
-    sender: currentUser.phoneNumber,
-    text: text,
-    timestamp: Date.now(),
-    status: 'delivered'
-  };
-
-  if (replyingToMsg) {
-    msgData.replyTo = replyingToMsg;
-    replyingToMsg = null;
-    msgInput.placeholder = "মেসেজ লিখুন...";
-  }
-
-  firebase.database().ref(`chats/${chatId}`).push(msgData);
-  saveToRecentChats(activePartnerPhone);
-
-  msgInput.value = '';
-  firebase.database().ref(`typing/${cleanPartner}/${cleanMy}`).set(false);
-}
-
-function setReply(sender, text) {
-  replyingToMsg = { sender, text };
-  const msgInput = document.getElementById('message');
-  msgInput.placeholder = `Replying: "${text.substring(0, 15)}..."`;
-  msgInput.focus();
-}
-
-function editMessage(msgKey, oldText, timestamp, isSeen) {
-  const timeElapsed = Date.now() - timestamp;
-  const allowedTime = isSeen ? (15 * 1000) : (15 * 60 * 1000);
-
-  if (timeElapsed > allowedTime) {
-    alert(isSeen ? "মেসেজটি দেখা হয়েছে! ১৫ সেকেন্ড পার হওয়ায় আর এডিট করা সম্ভব নয়।" : "১৫ মিনিট পার হয়ে গেছে! আর এডিট করা সম্ভব নয়।");
-    return;
-  }
-
-  const cleanMy = currentUser.phoneNumber.replace('+', '');
-  const cleanPartner = activePartnerPhone.replace('+', '');
-  const chatId = [cleanMy, cleanPartner].sort().join('_');
-
-  const newText = prompt("মেসেজ পরিবর্তন করুন:", oldText);
-  if (newText && newText.trim() !== "" && newText !== oldText) {
-    firebase.database().ref(`chats/${chatId}/${msgKey}`).update({
-      text: newText.trim() + " (edited)"
-    });
-  }
+  
+  document.getElementById('navigation-tabs').style.display = 'flex';
+  document.getElementById('search-wrapper').style.display = 'flex';
+  switchTab('chats');
 }
 
 function loadMessages() {
@@ -319,88 +98,213 @@ function loadMessages() {
         const msg = messages[key];
         const isMe = msg.sender === currentUser.phoneNumber;
 
-        if (!isMe && msg.status !== 'seen') {
-          firebase.database().ref(`chats/${chatId}/${key}`).update({ status: 'seen' });
-        }
+        const wrapper = document.createElement('div');
+        wrapper.className = `msg-wrapper ${isMe ? 'my-msg' : ''}`;
 
-        let statusHTML = '';
-        if (isMe) {
-          if (msg.status === 'seen') {
-            statusHTML = '<span class="msg-status-text">🗸🗸🗸 Seen</span>';
-          } else if (msg.status === 'sent') {
-            statusHTML = '<span class="msg-status-text">🗸🗸 Sent</span>';
-          } else {
-            statusHTML = '<span class="msg-status-text">🗸 Delivered</span>';
-          }
-        }
+        const msgItem = document.createElement('div');
+        msgItem.className = 'msg-item';
+        msgItem.innerText = msg.text;
 
-        let replyHTML = msg.replyTo ? `<div style="font-size:10px; opacity:0.8; border-left:2px solid #007aff; padding-left:4px; margin-bottom:4px;"><b>${msg.replyTo.sender}:</b> ${msg.replyTo.text}</div>` : '';
-        let editBtn = isMe ? `<button style="padding:1px 4px; font-size:9px; margin-left:4px; cursor:pointer;" onclick="editMessage('${key}', '${msg.text.replace(" (edited)", "")}', ${msg.timestamp}, ${msg.status === 'seen'})">✏️</button>` : '';
+        // Press & Hold Event (0.8s)
+        msgItem.addEventListener('touchstart', () => startHold(wrapper, key, msg.text, isMe));
+        msgItem.addEventListener('touchend', endHold);
+        msgItem.addEventListener('mousedown', () => startHold(wrapper, key, msg.text, isMe));
+        msgItem.addEventListener('mouseup', endHold);
 
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `msg-item ${isMe ? 'my-message' : ''}`;
-        msgDiv.innerHTML = `
-          ${replyHTML}
-          <span>${msg.text}</span>
-          ${statusHTML}
-          ${editBtn}
-          <button style="padding:1px 4px; font-size:9px; margin-left:2px; cursor:pointer;" onclick="setReply('${msg.sender}', '${msg.text}')">↩</button>
-        `;
-
-        chatBox.appendChild(msgDiv);
+        wrapper.appendChild(msgItem);
+        chatBox.appendChild(wrapper);
       });
       chatBox.scrollTop = chatBox.scrollHeight;
     }
   });
 }
 
-function saveToRecentChats(partnerPhone) {
-  const cleanMy = currentUser.phoneNumber.replace('+', '');
-  const cleanPartner = partnerPhone.replace('+', '');
+function startHold(wrapper, msgKey, text, isMe) {
+  holdTimer = setTimeout(() => {
+    showActionMenu(wrapper, msgKey, text, isMe);
+  }, 800);
+}
 
-  firebase.database().ref(`user_chats/${cleanMy}/${cleanPartner}`).set({ phone: partnerPhone, time: Date.now() });
-  firebase.database().ref(`user_chats/${cleanPartner}/${cleanMy}`).set({ phone: currentUser.phoneNumber, time: Date.now() });
+function endHold() {
+  clearTimeout(holdTimer);
+}
+
+// 3D Action Menu with correct serial: 1. 3-Dot, 2. Edit, 3. Reply
+function showActionMenu(wrapper, msgKey, text, isMe) {
+  document.querySelectorAll('.msg-action-bar').forEach(el => el.remove());
+
+  const actionBar = document.createElement('div');
+  actionBar.className = 'msg-action-bar';
+
+  // 1. 3-Dot Icon SVG
+  const dotBtn = `
+    <button class="action-icon-btn" title="More Options" onclick="toggleDropdown('${msgKey}', '${text}')">
+      <svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+    </button>
+  `;
+
+  // 2. Edit Icon SVG (Middle)
+  const editBtn = isMe ? `
+    <button class="action-icon-btn" title="Edit Message" onclick="editMsg('${msgKey}', '${text}')">
+      <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+    </button>
+  ` : '';
+
+  // 3. Reply Icon SVG (Last)
+  const replyBtn = `
+    <button class="action-icon-btn" title="Reply" onclick="triggerReply('${text}')">
+      <svg viewBox="0 0 24 24"><path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg>
+    </button>
+  `;
+
+  actionBar.innerHTML = dotBtn + editBtn + replyBtn;
+  wrapper.appendChild(actionBar);
+}
+
+function triggerReply(text) {
+  const msgInput = document.getElementById('message');
+  msgInput.placeholder = `Replying: "${text.substring(0, 15)}..."`;
+  msgInput.focus();
+}
+
+function editMsg(key, oldText) {
+  const cleanMy = currentUser.phoneNumber.replace('+', '');
+  const cleanPartner = activePartnerPhone.replace('+', '');
+  const chatId = [cleanMy, cleanPartner].sort().join('_');
+
+  const newText = prompt("Edit Message:", oldText);
+  if (newText) {
+    firebase.database().ref(`chats/${chatId}/${key}`).update({ text: newText });
+  }
+}
+
+function toggleDropdown(msgKey, text) {
+  const opt = confirm("Select Action:\nOK = Pin Message\nCancel = Delete Message");
+  if (opt) {
+    pinMessage(text);
+  } else {
+    deleteMessage(msgKey);
+  }
+}
+
+function pinMessage(text) {
+  const cleanMy = currentUser.phoneNumber.replace('+', '');
+  const cleanPartner = activePartnerPhone.replace('+', '');
+  const chatId = [cleanMy, cleanPartner].sort().join('_');
+
+  firebase.database().ref(`pinned/${chatId}`).set({ text });
+}
+
+function listenToPinnedMessage() {
+  const cleanMy = currentUser.phoneNumber.replace('+', '');
+  const cleanPartner = activePartnerPhone.replace('+', '');
+  const chatId = [cleanMy, cleanPartner].sort().join('_');
+
+  firebase.database().ref(`pinned/${chatId}`).on('value', (snap) => {
+    const data = snap.val();
+    const banner = document.getElementById('pinned-banner');
+    if (data && data.text) {
+      banner.style.display = 'flex';
+      document.getElementById('pinned-text').innerText = data.text;
+    } else {
+      banner.style.display = 'none';
+    }
+  });
+}
+
+function deleteMessage(key) {
+  const cleanMy = currentUser.phoneNumber.replace('+', '');
+  const cleanPartner = activePartnerPhone.replace('+', '');
+  const chatId = [cleanMy, cleanPartner].sort().join('_');
+
+  firebase.database().ref(`chats/${chatId}/${key}`).remove();
+}
+
+function sendMessage() {
+  const msgInput = document.getElementById('message');
+  const text = msgInput.value.trim();
+  if (!text || !activePartnerPhone) return;
+
+  const cleanMy = currentUser.phoneNumber.replace('+', '');
+  const cleanPartner = activePartnerPhone.replace('+', '');
+  const chatId = [cleanMy, cleanPartner].sort().join('_');
+
+  firebase.database().ref(`chats/${chatId}`).push({
+    sender: currentUser.phoneNumber,
+    text: text,
+    timestamp: Date.now()
+  });
+
+  saveRecentChat(activePartnerPhone, activePartnerName);
+  msgInput.value = '';
+}
+
+function saveRecentChat(phone, name) {
+  const cleanMy = currentUser.phoneNumber.replace('+', '');
+  const cleanPartner = phone.replace('+', '');
+
+  firebase.database().ref(`user_chats/${cleanMy}/${cleanPartner}`).set({ phone, name, time: Date.now() });
 }
 
 function loadRecentChats() {
   const cleanMy = currentUser.phoneNumber.replace('+', '');
   const listDiv = document.getElementById('recent-chats-list');
 
-  firebase.database().ref(`user_chats/${cleanMy}`).on('value', (snapshot) => {
+  firebase.database().ref(`user_chats/${cleanMy}`).on('value', (snap) => {
     listDiv.innerHTML = '';
-    const chats = snapshot.val();
+    const chats = snap.val();
     if (chats) {
-      Object.keys(chats).forEach((key) => {
+      Object.keys(chats).forEach((k) => {
         const item = document.createElement('div');
         item.className = 'list-item';
-        item.innerHTML = `<span>📱 ${chats[key].phone}</span>`;
-        item.onclick = () => openChat(chats[key].phone);
+        item.innerHTML = `
+          <div class="item-left">
+            <div class="initial-avatar">${chats[k].name.charAt(0).toUpperCase()}</div>
+            <b>${chats[k].name}</b>
+          </div>
+          <button class="icon-btn" onclick="event.stopPropagation(); showPartnerModal('${chats[k].phone}', '${chats[k].name}')">ℹ️</button>
+        `;
+        item.onclick = () => openChat(chats[k].phone, chats[k].name);
         listDiv.appendChild(item);
       });
-    } else {
-      listDiv.innerHTML = '<p style="font-size:12px; opacity:0.6;">কোনো সাম্প্রতিক চ্যাট নেই</p>';
     }
   });
 }
 
 function loadContacts() {
-  const cleanMy = currentUser.phoneNumber.replace('+', '');
   const listDiv = document.getElementById('contacts-list');
-
-  firebase.database().ref(`users`).on('value', (snapshot) => {
+  firebase.database().ref(`users`).on('value', (snap) => {
     listDiv.innerHTML = '';
-    const users = snapshot.val();
+    const users = snap.val();
     if (users) {
-      Object.keys(users).forEach((key) => {
-        const user = users[key];
-        if (user.phone !== currentUser.phoneNumber) {
+      Object.keys(users).forEach((k) => {
+        if (users[k].phone !== currentUser.phoneNumber) {
           const item = document.createElement('div');
           item.className = 'list-item';
-          item.innerHTML = `<span>👤 <b>${user.name}</b> (${user.phone})</span>`;
-          item.onclick = () => openChat(user.phone, user.name);
+          item.innerHTML = `
+            <div class="item-left">
+              <div class="initial-avatar">${users[k].name.charAt(0).toUpperCase()}</div>
+              <div><b>${users[k].name}</b><br><small>${users[k].phone}</small></div>
+            </div>
+          `;
+          item.onclick = () => openChat(users[k].phone, users[k].name);
           listDiv.appendChild(item);
         }
       });
     }
   });
+}
+
+function showPartnerDetails() {
+  showPartnerModal(activePartnerPhone, activePartnerName);
+}
+
+function showPartnerModal(phone, name) {
+  document.getElementById('modal-name').innerText = name;
+  document.getElementById('modal-phone').innerText = phone;
+  document.getElementById('partner-modal').style.display = 'flex';
+}
+
+function closeModal() {
+  document.getElementById('partner-modal').style.display = 'none';
 }
