@@ -9,6 +9,17 @@ const firebaseConfig = {
   appId: "1:704452309911:web:a8da0db3a31b57a00f4ad2"
 };
 
+// Firebase Configuration
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
@@ -24,7 +35,7 @@ let longPressTimer = null;
 
 window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { 'size': 'invisible' });
 
-// Global Theme Switcher Trigger
+// Global Theme Switcher
 document.querySelectorAll(".theme-btn-trigger").forEach(btn => {
   btn.onclick = () => {
     document.body.classList.toggle("lite-theme");
@@ -78,7 +89,7 @@ function initApp() {
   loadContacts();
 }
 
-// Presence System
+// Online Presence
 function setupPresence() {
   const userStatusRef = db.ref(`status/${currentUser.id}`);
   db.ref(".info/connected").on("value", (snap) => {
@@ -102,7 +113,7 @@ document.getElementById("tab-contacts").onclick = function() {
   loadContacts();
 };
 
-// Contacts Tab (With Add Chat Icon UI)
+// Contacts List
 function loadContacts() {
   const panel = document.getElementById("list-panel");
   panel.innerHTML = "";
@@ -162,7 +173,7 @@ function loadChats() {
   panel.innerHTML = "<p style='text-align:center; color:var(--text-muted); padding:20px;'>Select Contacts tab to find users & start chatting.</p>";
 }
 
-// Open Chat
+// Open Active Chat Window
 function openChat(partner) {
   activeChatPartner = partner;
   document.getElementById("chat-screen").classList.remove("hidden");
@@ -197,7 +208,7 @@ function openChat(partner) {
   currentChatRef.on("child_added", (snap) => renderMessage(snap.key, snap.val()));
 }
 
-// Render Messages, 0.8s Hold & Swipe-to-Reply
+// Render Messages
 function renderMessage(msgKey, msg) {
   const container = document.getElementById("messages-container");
   const bubble = document.createElement("div");
@@ -206,45 +217,82 @@ function renderMessage(msgKey, msg) {
   bubble.className = `msg-bubble ${isOwn ? "own" : "partner"}`;
   bubble.innerHTML = `<div>${msg.text}</div><div class="msg-footer"><span>${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span></div>`;
 
-  // 0.8s Hold Trigger
-  const startHold = () => {
-    longPressTimer = setTimeout(() => {
-      selectedMsgId = msgKey;
-      selectedMsgText = msg.text;
-      
-      const bar = document.getElementById("floating-action-bar");
-      bar.classList.remove("hidden");
-      const rect = bubble.getBoundingClientRect();
-      bar.style.top = `${bubble.offsetTop - 45}px`;
-      bar.style.left = isOwn ? `${rect.left - 40}px` : `${rect.left}px`;
-    }, 800);
+  // Floating Bar Displays on Press & Hold
+  const showFloatingBar = () => {
+    selectedMsgId = msgKey;
+    selectedMsgText = msg.text;
+
+    const bar = document.getElementById("floating-action-bar");
+    bar.classList.remove("hidden");
+
+    const bubbleTop = bubble.offsetTop;
+    const bubbleLeft = bubble.offsetLeft;
+
+    bar.style.top = `${Math.max(10, bubbleTop - 45)}px`;
+    if (isOwn) {
+      bar.style.right = "16px";
+      bar.style.left = "auto";
+    } else {
+      bar.style.left = `${Math.max(16, bubbleLeft)}px`;
+      bar.style.right = "auto";
+    }
   };
 
-  const cancelHold = () => clearTimeout(longPressTimer);
+  // 1. Exactly 0.8s (800ms) Press & Hold Logic
+  const startHold = () => {
+    longPressTimer = setTimeout(showFloatingBar, 800);
+  };
 
-  bubble.addEventListener("touchstart", startHold);
+  const cancelHold = () => {
+    clearTimeout(longPressTimer);
+  };
+
+  // Touch & Mouse Events
+  bubble.addEventListener("touchstart", startHold, { passive: true });
   bubble.addEventListener("touchend", cancelHold);
+  bubble.addEventListener("touchmove", cancelHold);
   bubble.addEventListener("mousedown", startHold);
   bubble.addEventListener("mouseup", cancelHold);
+  bubble.addEventListener("mouseleave", cancelHold);
 
-  // Swipe to Reply
+  // 2. Swipe Right OR Left to Reply Logic
   let startX = 0, currentX = 0;
-  bubble.addEventListener("touchstart", (e) => { startX = e.touches[0].clientX; });
+  bubble.addEventListener("touchstart", (e) => { 
+    startX = e.touches[0].clientX; 
+  }, { passive: true });
+
   bubble.addEventListener("touchmove", (e) => {
     currentX = e.touches[0].clientX;
     const diffX = currentX - startX;
-    if (Math.abs(diffX) < 100) bubble.style.transform = `translateX(${diffX}px)`;
-  });
+    // Visually move bubble with finger drag
+    if (Math.abs(diffX) < 100) {
+      bubble.style.transform = `translateX(${diffX}px)`;
+    }
+  }, { passive: true });
+
   bubble.addEventListener("touchend", () => {
     const diffX = currentX - startX;
-    bubble.style.transform = "translateX(0px)";
-    if (Math.abs(diffX) > 50) triggerReply(msg.text);
-    startX = 0; currentX = 0;
+    bubble.style.transform = "translateX(0px)"; // Reset position
+    
+    // Swipe distance threshold (> 40px left or right triggers reply)
+    if (Math.abs(diffX) > 40 && startX !== 0 && currentX !== 0) {
+      cancelHold(); // Cancel press & hold timer on swipe
+      triggerReply(msg.text);
+    }
+    startX = 0; 
+    currentX = 0;
   });
 
   container.appendChild(bubble);
   container.scrollTop = container.scrollHeight;
 }
+
+// Hide Floating Action Bar when clicking outside
+document.getElementById("messages-container").addEventListener("click", (e) => {
+  if (!e.target.closest(".msg-bubble") && !e.target.closest("#floating-action-bar")) {
+    document.getElementById("floating-action-bar").classList.add("hidden");
+  }
+});
 
 function triggerReply(text) {
   selectedMsgText = text;
@@ -253,7 +301,11 @@ function triggerReply(text) {
   document.getElementById("message-input").focus();
 }
 
-// Action Bar Buttons
+document.getElementById("cancel-reply-btn").onclick = () => {
+  document.getElementById("reply-preview-box").classList.add("hidden");
+};
+
+// Floating Bar Actions
 document.getElementById("act-reply").onclick = () => {
   triggerReply(selectedMsgText);
   document.getElementById("floating-action-bar").classList.add("hidden");
@@ -262,6 +314,7 @@ document.getElementById("act-reply").onclick = () => {
 document.getElementById("act-edit").onclick = () => {
   isEditing = true;
   document.getElementById("message-input").value = selectedMsgText;
+  document.getElementById("message-input").focus();
   document.getElementById("floating-action-bar").classList.add("hidden");
 };
 
@@ -274,7 +327,7 @@ document.getElementById("act-more").onclick = () => {
   document.getElementById("floating-action-bar").classList.add("hidden");
 };
 
-// Enter Key Send Execution
+// Send / Edit Execution
 document.getElementById("message-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
@@ -346,7 +399,7 @@ function listenNotifications() {
   });
 }
 
-// Profile and Main Menu
+// Profile & Main Menu
 document.getElementById("main-menu-btn").onclick = () => document.getElementById("main-menu-modal").classList.remove("hidden");
 document.getElementById("menu-my-profile").onclick = () => {
   document.getElementById("main-menu-modal").classList.add("hidden");
