@@ -22,41 +22,27 @@ let selectedMsgText = "";
 let isEditing = false;
 let longPressTimer = null;
 
-// Render Invisible Recaptcha for Phone Auth
-window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-  'size': 'invisible'
+window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { 'size': 'invisible' });
+
+// Global Theme Switcher Trigger
+document.querySelectorAll(".theme-btn-trigger").forEach(btn => {
+  btn.onclick = () => {
+    document.body.classList.toggle("lite-theme");
+    document.body.classList.toggle("dark-theme");
+  };
 });
 
-// Theme Switcher Logic
-function toggleTheme() {
-  document.body.classList.toggle("lite-theme");
-  document.body.classList.toggle("dark-theme");
-}
-document.getElementById("theme-btn").onclick = toggleTheme;
-document.getElementById("auth-theme-btn").onclick = toggleTheme;
-
-// --- Flexible Bangladeshi (+880) OTP Authentication ---
+// Phone OTP Auth
 document.getElementById("send-otp-btn").onclick = () => {
   const name = document.getElementById("auth-name").value.trim();
   let phone = document.getElementById("auth-phone").value.trim();
 
   if (!name) return alert("Please enter your name!");
-
-  // ইউজার 01XXXXXXXXX লিখলে স্বয়ংক্রিয়ভাবে +88 যুক্ত হবে
-  if (phone.startsWith("01")) {
-    phone = "+88" + phone;
-  } else if (phone.startsWith("8801")) {
-    phone = "+" + phone;
-  }
-
-  // স্পেস বা ড্যাশ তুলে ফেলা
+  if (phone.startsWith("01")) phone = "+88" + phone;
+  else if (phone.startsWith("8801")) phone = "+" + phone;
   phone = phone.replace(/[\s-]/g, "");
 
-  const bdPhoneRegex = /^\+8801[3-9]\d{8}$/;
-
-  if (!bdPhoneRegex.test(phone)) {
-    return alert("Invalid Bangladesh number! Examples:\n• +88017XXXXXXXX\n• 017XXXXXXXX");
-  }
+  if (!/^\+8801[3-9]\d{8}$/.test(phone)) return alert("Invalid Bangladesh number!");
 
   auth.signInWithPhoneNumber(phone, window.recaptchaVerifier)
     .then((result) => {
@@ -65,7 +51,7 @@ document.getElementById("send-otp-btn").onclick = () => {
       document.getElementById("otp-step").classList.remove("hidden");
       alert("OTP code has been sent!");
     })
-    .catch((error) => alert("Error sending OTP: " + error.message));
+    .catch((error) => alert("Error: " + error.message));
 };
 
 document.getElementById("verify-otp-btn").onclick = () => {
@@ -76,16 +62,11 @@ document.getElementById("verify-otp-btn").onclick = () => {
   if (phone.startsWith("01")) phone = "+88" + phone;
   phone = phone.replace(/[\s-]/g, "");
 
-  if (otp.length !== 6) return alert("Please enter a valid 6-digit OTP!");
+  if (otp.length !== 6) return alert("Enter valid 6-digit OTP!");
 
   confirmationResult.confirm(otp).then((res) => {
-    const uid = res.user.uid;
-    currentUser = { id: uid, name: name, phone: phone, bio: "Hey there! I am using Tock." };
-    
-    // Save User Data to Firebase Realtime Database
-    db.ref(`users/${uid}`).set(currentUser).then(() => {
-      initApp();
-    });
+    currentUser = { id: res.user.uid, name: name, phone: phone, bio: "Hey there! I am using Tock." };
+    db.ref(`users/${res.user.uid}`).set(currentUser).then(initApp);
   }).catch((err) => alert("Invalid OTP: " + err.message));
 };
 
@@ -97,65 +78,31 @@ function initApp() {
   loadContacts();
 }
 
-// Presence System (.onDisconnect)
+// Presence System
 function setupPresence() {
   const userStatusRef = db.ref(`status/${currentUser.id}`);
   db.ref(".info/connected").on("value", (snap) => {
     if (!snap.val()) return;
-    userStatusRef.onDisconnect().set("Offline").then(() => userStatusRef.set("Online"));
+    userStatusRef.onDisconnect().set({ state: "Offline", lastSeen: Date.now() }).then(() => {
+      userStatusRef.set({ state: "Online", lastSeen: Date.now() });
+    });
   });
 }
 
-// Notifications & Real-Time Chat Invites
-function sendInvite(targetId) {
-  db.ref(`invites/${targetId}/${currentUser.id}`).set({
-    senderName: currentUser.name,
-    senderPhone: currentUser.phone,
-    timestamp: Date.now()
-  });
-}
+// Navigation Tabs
+document.getElementById("tab-chats").onclick = function() {
+  this.classList.add("active");
+  document.getElementById("tab-contacts").classList.remove("active");
+  loadChats();
+};
 
-function listenNotifications() {
-  db.ref(`invites/${currentUser.id}`).on("value", (snap) => {
-    const badge = document.getElementById("notif-badge");
-    const notifList = document.getElementById("notif-list");
-    notifList.innerHTML = "";
+document.getElementById("tab-contacts").onclick = function() {
+  this.classList.add("active");
+  document.getElementById("tab-chats").classList.remove("active");
+  loadContacts();
+};
 
-    if (snap.exists()) {
-      badge.classList.add("active");
-      snap.forEach((child) => {
-        const inv = child.val();
-        const senderId = child.key;
-
-        const div = document.createElement("div");
-        div.className = "menu-item";
-        div.style.justifyContent = "space-between";
-        div.innerHTML = `<span><strong>${inv.senderName}</strong> sent you a chat invite.</span>`;
-        
-        const acceptBtn = document.createElement("button");
-        acceptBtn.className = "neumorphic-text-btn invited";
-        acceptBtn.textContent = "Accept";
-        acceptBtn.onclick = () => {
-          db.ref(`contacts/${currentUser.id}/${senderId}`).set(true);
-          db.ref(`contacts/${senderId}/${currentUser.id}`).set(true);
-          db.ref(`invites/${currentUser.id}/${senderId}`).remove();
-          alert("Invite accepted!");
-        };
-        
-        div.appendChild(acceptBtn);
-        notifList.appendChild(div);
-      });
-    } else {
-      badge.classList.remove("active");
-      notifList.innerHTML = "<p style='text-align:center; color:var(--text-muted);'>No new notifications</p>";
-    }
-  });
-}
-
-document.getElementById("notif-btn").onclick = () => document.getElementById("notif-modal").classList.remove("hidden");
-document.getElementById("close-notif-btn").onclick = () => document.getElementById("notif-modal").classList.add("hidden");
-
-// Contacts List Render
+// Contacts Tab (With Add Chat Icon UI)
 function loadContacts() {
   const panel = document.getElementById("list-panel");
   panel.innerHTML = "";
@@ -164,13 +111,21 @@ function loadContacts() {
     snap.forEach((child) => {
       const user = child.val();
       if (user.id !== currentUser.id) {
+        const firstLetter = user.name ? user.name.charAt(0).toUpperCase() : "U";
+        
         const row = document.createElement("div");
         row.className = "menu-item";
         row.style.justifyContent = "space-between";
 
-        const info = document.createElement("span");
-        info.textContent = `${user.name} (${user.phone})`;
-        row.appendChild(info);
+        row.innerHTML = `
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div class="avatar-small">${firstLetter}</div>
+            <div>
+              <div style="font-weight:600;">${user.name}</div>
+              <div style="font-size:12px; color:var(--text-muted);">${user.phone}</div>
+            </div>
+          </div>
+        `;
 
         const inviteBtn = document.createElement("button");
         inviteBtn.className = "neumorphic-text-btn";
@@ -187,7 +142,11 @@ function loadContacts() {
 
         inviteBtn.onclick = (e) => {
           e.stopPropagation();
-          sendInvite(user.id);
+          db.ref(`invites/${user.id}/${currentUser.id}`).set({
+            senderName: currentUser.name,
+            senderPhone: currentUser.phone,
+            timestamp: Date.now()
+          });
         };
 
         row.onclick = () => openChat(user);
@@ -198,31 +157,35 @@ function loadContacts() {
   });
 }
 
-// Profile Modal View & Edit
-document.getElementById("main-menu-btn").onclick = () => document.getElementById("main-menu-modal").classList.remove("hidden");
-document.getElementById("menu-my-profile").onclick = () => {
-  document.getElementById("main-menu-modal").classList.add("hidden");
-  document.getElementById("edit-name-input").value = currentUser.name;
-  document.getElementById("edit-bio-input").value = currentUser.bio || "";
-  document.getElementById("edit-profile-modal").classList.remove("hidden");
-};
+function loadChats() {
+  const panel = document.getElementById("list-panel");
+  panel.innerHTML = "<p style='text-align:center; color:var(--text-muted); padding:20px;'>Select Contacts tab to find users & start chatting.</p>";
+}
 
-document.getElementById("save-profile-btn").onclick = () => {
-  currentUser.name = document.getElementById("edit-name-input").value.trim();
-  currentUser.bio = document.getElementById("edit-bio-input").value.trim();
-  
-  db.ref(`users/${currentUser.id}`).update(currentUser).then(() => {
-    alert("Profile updated!");
-    document.getElementById("edit-profile-modal").classList.add("hidden");
-  });
-};
-document.getElementById("close-profile-btn").onclick = () => document.getElementById("edit-profile-modal").classList.add("hidden");
-
-// Chat Interface & Floating Actions
+// Open Chat
 function openChat(partner) {
   activeChatPartner = partner;
   document.getElementById("chat-screen").classList.remove("hidden");
   document.getElementById("chat-partner-name").textContent = partner.name;
+
+  const firstLetter = partner.name ? partner.name.charAt(0).toUpperCase() : "U";
+  document.getElementById("chat-partner-avatar").textContent = firstLetter;
+
+  db.ref(`status/${partner.id}`).on("value", (snap) => {
+    const val = snap.val();
+    const statusElem = document.getElementById("chat-partner-status");
+    if (val && val.state === "Online") {
+      statusElem.textContent = "Online";
+      statusElem.style.color = "#34C759";
+    } else if (val && val.lastSeen) {
+      const timeStr = new Date(val.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      statusElem.textContent = `Last seen ${timeStr}`;
+      statusElem.style.color = "var(--text-muted)";
+    } else {
+      statusElem.textContent = "Offline";
+      statusElem.style.color = "var(--text-muted)";
+    }
+  });
 
   const messagesContainer = document.getElementById("messages-container");
   messagesContainer.innerHTML = "";
@@ -234,6 +197,7 @@ function openChat(partner) {
   currentChatRef.on("child_added", (snap) => renderMessage(snap.key, snap.val()));
 }
 
+// Render Messages, 0.8s Hold & Swipe-to-Reply
 function renderMessage(msgKey, msg) {
   const container = document.getElementById("messages-container");
   const bubble = document.createElement("div");
@@ -242,8 +206,8 @@ function renderMessage(msgKey, msg) {
   bubble.className = `msg-bubble ${isOwn ? "own" : "partner"}`;
   bubble.innerHTML = `<div>${msg.text}</div><div class="msg-footer"><span>${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span></div>`;
 
-  // Long press event for Floating Bar
-  const handleHold = (e) => {
+  // 0.8s Hold Trigger
+  const startHold = () => {
     longPressTimer = setTimeout(() => {
       selectedMsgId = msgKey;
       selectedMsgText = msg.text;
@@ -251,26 +215,47 @@ function renderMessage(msgKey, msg) {
       const bar = document.getElementById("floating-action-bar");
       bar.classList.remove("hidden");
       const rect = bubble.getBoundingClientRect();
-      bar.style.top = `${rect.top - 40}px`;
-      bar.style.left = `${rect.left}px`;
-    }, 700);
+      bar.style.top = `${bubble.offsetTop - 45}px`;
+      bar.style.left = isOwn ? `${rect.left - 40}px` : `${rect.left}px`;
+    }, 800);
   };
 
   const cancelHold = () => clearTimeout(longPressTimer);
 
-  bubble.addEventListener("touchstart", handleHold);
+  bubble.addEventListener("touchstart", startHold);
   bubble.addEventListener("touchend", cancelHold);
-  bubble.addEventListener("mousedown", handleHold);
+  bubble.addEventListener("mousedown", startHold);
   bubble.addEventListener("mouseup", cancelHold);
+
+  // Swipe to Reply
+  let startX = 0, currentX = 0;
+  bubble.addEventListener("touchstart", (e) => { startX = e.touches[0].clientX; });
+  bubble.addEventListener("touchmove", (e) => {
+    currentX = e.touches[0].clientX;
+    const diffX = currentX - startX;
+    if (Math.abs(diffX) < 100) bubble.style.transform = `translateX(${diffX}px)`;
+  });
+  bubble.addEventListener("touchend", () => {
+    const diffX = currentX - startX;
+    bubble.style.transform = "translateX(0px)";
+    if (Math.abs(diffX) > 50) triggerReply(msg.text);
+    startX = 0; currentX = 0;
+  });
 
   container.appendChild(bubble);
   container.scrollTop = container.scrollHeight;
 }
 
-// Floating Bar Action Listeners
-document.getElementById("act-reply").onclick = () => {
+function triggerReply(text) {
+  selectedMsgText = text;
   document.getElementById("reply-preview-box").classList.remove("hidden");
-  document.getElementById("reply-preview-text").textContent = `Replying: ${selectedMsgText}`;
+  document.getElementById("reply-preview-text").textContent = `Replying: ${text}`;
+  document.getElementById("message-input").focus();
+}
+
+// Action Bar Buttons
+document.getElementById("act-reply").onclick = () => {
+  triggerReply(selectedMsgText);
   document.getElementById("floating-action-bar").classList.add("hidden");
 };
 
@@ -280,17 +265,23 @@ document.getElementById("act-edit").onclick = () => {
   document.getElementById("floating-action-bar").classList.add("hidden");
 };
 
-document.getElementById("act-delete").onclick = () => {
-  if (currentChatRef && selectedMsgId) {
-    currentChatRef.child(selectedMsgId).remove();
+document.getElementById("act-more").onclick = () => {
+  if (confirm("Delete this message?")) {
+    const roomId = currentUser.id < activeChatPartner.id ? `${currentUser.id}_${activeChatPartner.id}` : `${activeChatPartner.id}_${currentUser.id}`;
+    db.ref(`messages/${roomId}/${selectedMsgId}`).remove();
     document.getElementById(`msg-${selectedMsgId}`)?.remove();
-    document.getElementById("floating-action-bar").classList.add("hidden");
   }
+  document.getElementById("floating-action-bar").classList.add("hidden");
 };
 
-document.getElementById("cancel-reply-btn").onclick = () => document.getElementById("reply-preview-box").classList.add("hidden");
+// Enter Key Send Execution
+document.getElementById("message-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    document.getElementById("send-btn").click();
+  }
+});
 
-// Send / Edit Message Action
 document.getElementById("send-btn").onclick = () => {
   const input = document.getElementById("message-input");
   const text = input.value.trim();
@@ -312,6 +303,69 @@ document.getElementById("send-btn").onclick = () => {
   input.value = "";
   document.getElementById("reply-preview-box").classList.add("hidden");
 };
+
+// Info Modal
+document.getElementById("chat-info-btn").onclick = () => {
+  if (!activeChatPartner) return;
+  const firstLetter = activeChatPartner.name ? activeChatPartner.name.charAt(0).toUpperCase() : "U";
+  document.getElementById("info-avatar").textContent = firstLetter;
+  document.getElementById("info-name").textContent = activeChatPartner.name;
+  document.getElementById("info-phone").textContent = activeChatPartner.phone;
+  document.getElementById("info-modal").classList.remove("hidden");
+};
+document.getElementById("info-close-modal").onclick = () => document.getElementById("info-modal").classList.add("hidden");
+
+// Notifications Modal
+document.querySelectorAll(".notif-btn-trigger").forEach(btn => {
+  btn.onclick = () => document.getElementById("notif-modal").classList.remove("hidden");
+});
+document.getElementById("close-notif-btn").onclick = () => document.getElementById("notif-modal").classList.add("hidden");
+
+function listenNotifications() {
+  db.ref(`invites/${currentUser.id}`).on("value", (snap) => {
+    const notifList = document.getElementById("notif-list");
+    notifList.innerHTML = "";
+
+    document.querySelectorAll(".notif-badge-elem").forEach(b => {
+      if (snap.exists()) b.classList.add("active");
+      else b.classList.remove("active");
+    });
+
+    if (snap.exists()) {
+      snap.forEach((child) => {
+        const inv = child.val();
+        const div = document.createElement("div");
+        div.className = "menu-item";
+        div.style.justifyContent = "space-between";
+        div.innerHTML = `<span><strong>${inv.senderName}</strong> sent you a chat invite.</span>`;
+        notifList.appendChild(div);
+      });
+    } else {
+      notifList.innerHTML = "<p style='text-align:center; color:var(--text-muted);'>No new notifications</p>";
+    }
+  });
+}
+
+// Profile and Main Menu
+document.getElementById("main-menu-btn").onclick = () => document.getElementById("main-menu-modal").classList.remove("hidden");
+document.getElementById("menu-my-profile").onclick = () => {
+  document.getElementById("main-menu-modal").classList.add("hidden");
+  document.getElementById("my-avatar").textContent = currentUser.name ? currentUser.name.charAt(0).toUpperCase() : "U";
+  document.getElementById("edit-name-input").value = currentUser.name;
+  document.getElementById("edit-bio-input").value = currentUser.bio || "";
+  document.getElementById("edit-profile-modal").classList.remove("hidden");
+};
+
+document.getElementById("save-profile-btn").onclick = () => {
+  currentUser.name = document.getElementById("edit-name-input").value.trim();
+  currentUser.bio = document.getElementById("edit-bio-input").value.trim();
+  
+  db.ref(`users/${currentUser.id}`).update(currentUser).then(() => {
+    alert("Profile updated!");
+    document.getElementById("edit-profile-modal").classList.add("hidden");
+  });
+};
+document.getElementById("close-profile-btn").onclick = () => document.getElementById("edit-profile-modal").classList.add("hidden");
 
 document.getElementById("chat-back-btn").onclick = () => document.getElementById("chat-screen").classList.add("hidden");
 document.getElementById("menu-logout").onclick = () => location.reload();
