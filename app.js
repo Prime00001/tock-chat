@@ -9,17 +9,6 @@ const firebaseConfig = {
   appId: "1:704452309911:web:a8da0db3a31b57a00f4ad2"
 };
 
-// Firebase Configuration
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
-
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
@@ -139,15 +128,13 @@ function loadContacts() {
         `;
 
         const inviteBtn = document.createElement("button");
-        inviteBtn.className = "neumorphic-text-btn";
+        inviteBtn.className = "neu-btn sm";
 
         db.ref(`invites/${user.id}/${currentUser.id}`).on("value", (invSnap) => {
           if (invSnap.exists()) {
             inviteBtn.textContent = "Invited ⏳";
-            inviteBtn.classList.add("invited");
           } else {
             inviteBtn.textContent = "Invite";
-            inviteBtn.classList.remove("invited");
           }
         });
 
@@ -208,7 +195,7 @@ function openChat(partner) {
   currentChatRef.on("child_added", (snap) => renderMessage(snap.key, snap.val()));
 }
 
-// Render Messages
+// Render Messages with Working 0.8s Press/Hold & Swipe-to-Reply
 function renderMessage(msgKey, msg) {
   const container = document.getElementById("messages-container");
   const bubble = document.createElement("div");
@@ -217,7 +204,6 @@ function renderMessage(msgKey, msg) {
   bubble.className = `msg-bubble ${isOwn ? "own" : "partner"}`;
   bubble.innerHTML = `<div>${msg.text}</div><div class="msg-footer"><span>${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span></div>`;
 
-  // Floating Bar Displays on Press & Hold
   const showFloatingBar = () => {
     selectedMsgId = msgKey;
     selectedMsgText = msg.text;
@@ -238,56 +224,65 @@ function renderMessage(msgKey, msg) {
     }
   };
 
-  // 1. Exactly 0.8s (800ms) Press & Hold Logic
+  // 0.8s (800ms) Press & Hold Logic
+  let isSwiping = false;
+
   const startHold = () => {
-    longPressTimer = setTimeout(showFloatingBar, 800);
-  };
-
-  const cancelHold = () => {
+    isSwiping = false;
     clearTimeout(longPressTimer);
+    longPressTimer = setTimeout(() => {
+      if (!isSwiping) showFloatingBar();
+    }, 800);
   };
 
-  // Touch & Mouse Events
-  bubble.addEventListener("touchstart", startHold, { passive: true });
-  bubble.addEventListener("touchend", cancelHold);
-  bubble.addEventListener("touchmove", cancelHold);
-  bubble.addEventListener("mousedown", startHold);
-  bubble.addEventListener("mouseup", cancelHold);
-  bubble.addEventListener("mouseleave", cancelHold);
+  const cancelHold = () => clearTimeout(longPressTimer);
 
-  // 2. Swipe Right OR Left to Reply Logic
+  // Swipe Left or Right Logic
   let startX = 0, currentX = 0;
-  bubble.addEventListener("touchstart", (e) => { 
-    startX = e.touches[0].clientX; 
+
+  bubble.addEventListener("touchstart", (e) => {
+    startX = e.touches[0].clientX;
+    currentX = startX;
+    startHold();
   }, { passive: true });
 
   bubble.addEventListener("touchmove", (e) => {
     currentX = e.touches[0].clientX;
     const diffX = currentX - startX;
-    // Visually move bubble with finger drag
+
+    if (Math.abs(diffX) > 10) {
+      isSwiping = true;
+      cancelHold();
+    }
+
     if (Math.abs(diffX) < 100) {
       bubble.style.transform = `translateX(${diffX}px)`;
     }
   }, { passive: true });
 
   bubble.addEventListener("touchend", () => {
+    cancelHold();
     const diffX = currentX - startX;
-    bubble.style.transform = "translateX(0px)"; // Reset position
-    
-    // Swipe distance threshold (> 40px left or right triggers reply)
-    if (Math.abs(diffX) > 40 && startX !== 0 && currentX !== 0) {
-      cancelHold(); // Cancel press & hold timer on swipe
+    bubble.style.transform = "translateX(0px)";
+
+    if (Math.abs(diffX) > 40 && isSwiping) {
       triggerReply(msg.text);
     }
-    startX = 0; 
+
+    startX = 0;
     currentX = 0;
+    isSwiping = false;
   });
+
+  bubble.addEventListener("mousedown", startHold);
+  bubble.addEventListener("mouseup", cancelHold);
+  bubble.addEventListener("mouseleave", cancelHold);
 
   container.appendChild(bubble);
   container.scrollTop = container.scrollHeight;
 }
 
-// Hide Floating Action Bar when clicking outside
+// Hide Action Bar
 document.getElementById("messages-container").addEventListener("click", (e) => {
   if (!e.target.closest(".msg-bubble") && !e.target.closest("#floating-action-bar")) {
     document.getElementById("floating-action-bar").classList.add("hidden");
@@ -305,7 +300,7 @@ document.getElementById("cancel-reply-btn").onclick = () => {
   document.getElementById("reply-preview-box").classList.add("hidden");
 };
 
-// Floating Bar Actions
+// Neumorphic Bar Actions
 document.getElementById("act-reply").onclick = () => {
   triggerReply(selectedMsgText);
   document.getElementById("floating-action-bar").classList.add("hidden");
@@ -318,13 +313,32 @@ document.getElementById("act-edit").onclick = () => {
   document.getElementById("floating-action-bar").classList.add("hidden");
 };
 
-document.getElementById("act-more").onclick = () => {
+document.getElementById("act-pin").onclick = () => {
+  if (!selectedMsgId || !activeChatPartner) return;
+  const roomId = currentUser.id < activeChatPartner.id ? `${currentUser.id}_${activeChatPartner.id}` : `${activeChatPartner.id}_${currentUser.id}`;
+  
+  db.ref(`pinned/${roomId}`).set({ msgId: selectedMsgId, text: selectedMsgText });
+  document.getElementById("pinned-banner").classList.remove("hidden");
+  document.getElementById("pinned-msg-text").textContent = selectedMsgText;
+  document.getElementById("floating-action-bar").classList.add("hidden");
+};
+
+document.getElementById("act-delete").onclick = () => {
+  if (!selectedMsgId || !activeChatPartner) return;
   if (confirm("Delete this message?")) {
     const roomId = currentUser.id < activeChatPartner.id ? `${currentUser.id}_${activeChatPartner.id}` : `${activeChatPartner.id}_${currentUser.id}`;
     db.ref(`messages/${roomId}/${selectedMsgId}`).remove();
     document.getElementById(`msg-${selectedMsgId}`)?.remove();
   }
   document.getElementById("floating-action-bar").classList.add("hidden");
+};
+
+// Unpin Action
+document.getElementById("unpin-btn").onclick = () => {
+  if (!activeChatPartner) return;
+  const roomId = currentUser.id < activeChatPartner.id ? `${currentUser.id}_${activeChatPartner.id}` : `${activeChatPartner.id}_${currentUser.id}`;
+  db.ref(`pinned/${roomId}`).remove();
+  document.getElementById("pinned-banner").classList.add("hidden");
 };
 
 // Send / Edit Execution
@@ -357,7 +371,7 @@ document.getElementById("send-btn").onclick = () => {
   document.getElementById("reply-preview-box").classList.add("hidden");
 };
 
-// Info Modal
+// Modals Setup
 document.getElementById("chat-info-btn").onclick = () => {
   if (!activeChatPartner) return;
   const firstLetter = activeChatPartner.name ? activeChatPartner.name.charAt(0).toUpperCase() : "U";
@@ -368,7 +382,6 @@ document.getElementById("chat-info-btn").onclick = () => {
 };
 document.getElementById("info-close-modal").onclick = () => document.getElementById("info-modal").classList.add("hidden");
 
-// Notifications Modal
 document.querySelectorAll(".notif-btn-trigger").forEach(btn => {
   btn.onclick = () => document.getElementById("notif-modal").classList.remove("hidden");
 });
@@ -399,7 +412,6 @@ function listenNotifications() {
   });
 }
 
-// Profile & Main Menu
 document.getElementById("main-menu-btn").onclick = () => document.getElementById("main-menu-modal").classList.remove("hidden");
 document.getElementById("menu-my-profile").onclick = () => {
   document.getElementById("main-menu-modal").classList.add("hidden");
