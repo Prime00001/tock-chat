@@ -1,176 +1,162 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tock</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tock Chat</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body class="dark-theme">
 
-  <!-- AUTH SCREEN -->
-  <div id="auth-screen" class="auth-container">
-    <div class="auth-card neu-box">
-      <h2>Welcome to Tock</h2>
-      <p class="subtitle">Enter your details to continue</p>
-      
-      <div id="phone-step">
-        <div class="input-group">
-          <input type="text" id="auth-name" placeholder="Your Name" required />
-        </div>
-        <div class="input-group">
-          <input type="tel" id="auth-phone" placeholder="Phone (e.g. 01700000000)" required />
-        </div>
-        <div id="recaptcha-container"></div>
-        <button id="send-otp-btn" class="neu-btn primary">Send OTP</button>
+  <!-- Authentication Screen -->
+  <div id="auth-screen" class="auth-wrapper">
+    <div class="auth-card neu-card">
+      <button class="theme-btn-trigger neu-btn icon-only-btn" title="Toggle Theme">
+        <span class="theme-icon">🌙</span>
+      </button>
+
+      <div class="auth-header">
+        <h2>Welcome to Tock</h2>
+        <p>Enter your details to continue</p>
       </div>
 
-      <div id="otp-step" class="hidden">
+      <!-- Step 1: Phone & Name Input -->
+      <div id="phone-step" class="auth-step">
         <div class="input-group">
-          <input type="text" id="auth-otp" placeholder="Enter 6-digit OTP" maxlength="6" />
+          <input type="text" id="auth-name" class="neu-input" placeholder="Your Name" required />
         </div>
-        <button id="verify-otp-btn" class="neu-btn primary">Verify & Login</button>
+        <div class="input-group">
+          <input type="tel" id="auth-phone" class="neu-input" placeholder="Phone (e.g. 01700000000)" required />
+        </div>
+        <div id="recaptcha-container"></div>
+        <button id="send-otp-btn" class="neu-btn primary full-width">Send OTP</button>
+      </div>
+
+      <!-- Step 2: OTP Input -->
+      <div id="otp-step" class="auth-step hidden">
+        <div class="input-group">
+          <input type="number" id="auth-otp" class="neu-input" placeholder="Enter 6-digit OTP" required />
+        </div>
+        <button id="verify-otp-btn" class="neu-btn primary full-width">Verify & Login</button>
       </div>
     </div>
   </div>
 
-  <!-- MAIN APP CONTAINER -->
+  <!-- Main App Container -->
   <div id="app-container" class="app-layout hidden">
-    
-    <!-- NAVIGATION / HEADER -->
-    <header class="app-header neu-bar">
-      <div class="header-left">
-        <button id="main-menu-btn" class="neu-circle-btn" title="Menu">
-          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-        </button>
-        <span class="app-title">Tock</span>
-      </div>
-      <div class="header-right">
-        <button class="notif-btn-trigger neu-circle-btn" title="Notifications">
-          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-          <span class="notif-badge-elem"></span>
-        </button>
-        <button class="theme-btn-trigger neu-circle-btn" title="Toggle Theme">
-          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path></svg>
+    <!-- Main Top Bar -->
+    <header class="top-bar neu-card">
+      <button id="main-menu-btn" class="neu-btn icon-only-btn">☰</button>
+      <h1 class="brand-title">Tock</h1>
+      <div class="top-actions">
+        <button class="theme-btn-trigger neu-btn icon-only-btn">🌙</button>
+        <button class="notif-btn-trigger neu-btn icon-only-btn relative">
+          🔔 <span class="notif-badge-elem"></span>
         </button>
       </div>
     </header>
 
-    <!-- TABS NAVIGATION -->
-    <div class="tabs-nav neu-bar">
+    <!-- Navigation Tabs -->
+    <div class="nav-tabs">
       <button id="tab-chats" class="tab-btn active">Chats</button>
       <button id="tab-contacts" class="tab-btn">Contacts</button>
     </div>
 
-    <!-- LIST PANEL -->
-    <div id="list-panel" class="panel-content"></div>
+    <!-- Contacts / Chats List Panel -->
+    <main id="list-panel" class="content-panel"></main>
 
-    <!-- CHAT SCREEN MODAL / OVERLAY -->
+    <!-- Active Chat Screen Overlay -->
     <div id="chat-screen" class="chat-overlay hidden">
-      <header class="chat-header neu-bar">
-        <button id="chat-back-btn" class="neu-circle-btn">
-          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-        </button>
+      <header class="chat-header neu-card">
+        <button id="chat-back-btn" class="neu-btn icon-only-btn">←</button>
         <div id="chat-info-btn" class="chat-user-details">
           <div id="chat-partner-avatar" class="avatar-small">U</div>
           <div>
-            <div id="chat-partner-name" class="user-name">User</div>
-            <div id="chat-partner-status" class="user-status">Offline</div>
+            <div id="chat-partner-name" class="partner-name">User</div>
+            <div id="chat-partner-status" class="partner-status">Offline</div>
           </div>
         </div>
       </header>
 
-      <!-- PINNED MESSAGE BANNER -->
-      <div id="pinned-banner" class="pinned-banner neu-box hidden">
-        <div class="pinned-content">
-          <svg class="svg-icon sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14l-1.5-6H19.5L18 3H6L4.5 11H6.5L5 17z"></path></svg>
-          <span id="pinned-msg-text">Pinned message...</span>
-        </div>
-        <button id="unpin-btn" class="neu-circle-btn sm">
-          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
+      <!-- Pinned Message Banner -->
+      <div id="pinned-banner" class="pinned-banner hidden neu-card">
+        <div class="pinned-text">📌 <span id="pinned-msg-text">Pinned Message</span></div>
+        <button id="unpin-btn" class="neu-btn sm">Unpin</button>
       </div>
 
-      <!-- MESSAGES CONTAINER -->
-      <div id="messages-container" class="messages-area"></div>
+      <!-- Messages Stream -->
+      <div id="messages-container" class="messages-container"></div>
 
-      <!-- NEUMORPHIC FLOATING ACTION BAR -->
-      <div id="floating-action-bar" class="floating-bar neu-box hidden">
-        <button id="act-reply" class="neu-circle-btn sm" title="Reply">
-          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"></polyline><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path></svg>
-        </button>
-        <button id="act-edit" class="neu-circle-btn sm" title="Edit">
-          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-        </button>
-        <button id="act-pin" class="neu-circle-btn sm" title="Pin">
-          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14l-1.5-6H19.5L18 3H6L4.5 11H6.5L5 17z"></path></svg>
-        </button>
-        <button id="act-delete" class="neu-circle-btn sm danger-icon" title="Delete">
-          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-        </button>
+      <!-- Floating Neumorphic Action Bar for Selected Message -->
+      <div id="floating-action-bar" class="floating-action-bar hidden neu-card">
+        <button id="act-reply" class="neu-btn sm" title="Reply">↩ Reply</button>
+        <button id="act-edit" class="neu-btn sm" title="Edit">✏️ Edit</button>
+        <button id="act-pin" class="neu-btn sm" title="Pin">📌 Pin</button>
+        <button id="act-delete" class="neu-btn sm danger" title="Delete">🗑️ Delete</button>
       </div>
 
-      <!-- REPLY PREVIEW BOX -->
-      <div id="reply-preview-box" class="reply-preview neu-box hidden">
-        <span id="reply-preview-text">Replying to message...</span>
-        <button id="cancel-reply-btn" class="neu-circle-btn sm">&times;</button>
+      <!-- Reply Preview Bar -->
+      <div id="reply-preview-box" class="reply-preview hidden neu-card">
+        <span id="reply-preview-text">Replying...</span>
+        <button id="cancel-reply-btn" class="neu-btn sm">✕</button>
       </div>
 
-      <!-- CHAT INPUT AREA -->
-      <div class="chat-input-area neu-bar">
-        <input type="text" id="message-input" placeholder="Type a message..." />
-        <button id="send-btn" class="neu-circle-btn primary">
-          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-        </button>
+      <!-- Message Input Bar -->
+      <div class="chat-input-bar neu-card">
+        <input type="text" id="message-input" class="neu-input" placeholder="Type a message..." />
+        <button id="send-btn" class="neu-btn primary">Send</button>
       </div>
     </div>
+  </div>
 
-    <!-- MODALS -->
-    <!-- Main Menu Modal -->
-    <div id="main-menu-modal" class="modal hidden">
-      <div class="modal-content neu-box">
-        <h3>Menu</h3>
-        <button id="menu-my-profile" class="neu-btn">Profile</button>
-        <button id="menu-logout" class="neu-btn danger">Logout</button>
+  <!-- Notifications Modal -->
+  <div id="notif-modal" class="modal-overlay hidden">
+    <div class="modal-card neu-card">
+      <h3>Notifications</h3>
+      <div id="notif-list" class="modal-body"></div>
+      <button id="close-notif-btn" class="neu-btn full-width" style="margin-top: 15px;">Close</button>
+    </div>
+  </div>
+
+  <!-- User Details / Partner Info Modal -->
+  <div id="info-modal" class="modal-overlay hidden">
+    <div class="modal-card neu-card text-center">
+      <div id="info-avatar" class="avatar-large">U</div>
+      <h3 id="info-name">User Name</h3>
+      <p id="info-phone" style="color:var(--text-muted); margin-bottom: 20px;">Phone</p>
+      <button id="info-close-modal" class="neu-btn full-width">Close</button>
+    </div>
+  </div>
+
+  <!-- Main Menu Modal -->
+  <div id="main-menu-modal" class="modal-overlay hidden">
+    <div class="modal-card neu-card">
+      <h3>Menu</h3>
+      <div class="menu-list">
+        <button id="menu-my-profile" class="neu-btn full-width" style="margin-bottom: 10px;">My Profile</button>
+        <button id="menu-logout" class="neu-btn full-width danger">Logout</button>
       </div>
     </div>
+  </div>
 
-    <!-- User Profile Modal -->
-    <div id="edit-profile-modal" class="modal hidden">
-      <div class="modal-content neu-box">
-        <h3>Edit Profile</h3>
-        <div id="my-avatar" class="avatar-large">U</div>
-        <input type="text" id="edit-name-input" placeholder="Name" />
-        <input type="text" id="edit-bio-input" placeholder="Bio" />
-        <div class="modal-actions">
-          <button id="save-profile-btn" class="neu-btn primary">Save</button>
-          <button id="close-profile-btn" class="neu-btn">Close</button>
-        </div>
+  <!-- Edit Profile Modal -->
+  <div id="edit-profile-modal" class="modal-overlay hidden">
+    <div class="modal-card neu-card">
+      <h3>My Profile</h3>
+      <div class="avatar-large" id="my-avatar" style="margin: 0 auto 15px auto;">U</div>
+      <div class="input-group">
+        <input type="text" id="edit-name-input" class="neu-input" placeholder="Name" />
       </div>
-    </div>
-
-    <!-- Partner Info Modal -->
-    <div id="info-modal" class="modal hidden">
-      <div class="modal-content neu-box">
-        <div id="info-avatar" class="avatar-large">U</div>
-        <h3 id="info-name">User Name</h3>
-        <p id="info-phone">Phone</p>
-        <button id="info-close-modal" class="neu-btn">Close</button>
+      <div class="input-group">
+        <input type="text" id="edit-bio-input" class="neu-input" placeholder="Bio" />
       </div>
+      <button id="save-profile-btn" class="neu-btn primary full-width" style="margin-bottom: 10px;">Save Profile</button>
+      <button id="close-profile-btn" class="neu-btn full-width">Cancel</button>
     </div>
-
-    <!-- Notifications Modal -->
-    <div id="notif-modal" class="modal hidden">
-      <div class="modal-content neu-box">
-        <h3>Notifications</h3>
-        <div id="notif-list"></div>
-        <button id="close-notif-btn" class="neu-btn">Close</button>
-      </div>
-    </div>
-
   </div>
 
   <script src="app.js"></script>

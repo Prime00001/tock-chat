@@ -75,7 +75,7 @@ function initApp() {
   document.getElementById("app-container").classList.remove("hidden");
   setupPresence();
   listenNotifications();
-  loadContacts();
+  loadChats();
 }
 
 // Online Presence
@@ -102,17 +102,26 @@ document.getElementById("tab-contacts").onclick = function() {
   loadContacts();
 };
 
-// Contacts List with Connection Check
+// Contacts Tab - Shows ONLY users whose chat invites have been accepted
 function loadContacts() {
   const panel = document.getElementById("list-panel");
   panel.innerHTML = "";
 
-  db.ref("users").once("value", (snap) => {
-    snap.forEach((child) => {
-      const user = child.val();
-      if (user.id !== currentUser.id) {
+  db.ref(`friends/${currentUser.id}`).once("value", (friendsSnap) => {
+    if (!friendsSnap.exists()) {
+      panel.innerHTML = "<p style='text-align:center; color:var(--text-muted); padding:20px;'>No contacts yet. Accept invites to add friends!</p>";
+      return;
+    }
+
+    friendsSnap.forEach((friendChild) => {
+      const friendId = friendChild.key;
+
+      db.ref(`users/${friendId}`).once("value", (userSnap) => {
+        const user = userSnap.val();
+        if (!user) return;
+
         const firstLetter = user.name ? user.name.charAt(0).toUpperCase() : "U";
-        
+
         const row = document.createElement("div");
         row.className = "menu-item";
         row.style.justifyContent = "space-between";
@@ -125,56 +134,63 @@ function loadContacts() {
               <div style="font-size:12px; color:var(--text-muted);">${user.phone}</div>
             </div>
           </div>
+          <button class="neu-btn sm" disabled style="opacity:0.7; cursor:default;">Connected</button>
         `;
 
-        const inviteBtn = document.createElement("button");
-        inviteBtn.className = "neu-btn sm";
-
-        // Check Connection / Friends status
-        db.ref(`friends/${currentUser.id}/${user.id}`).on("value", (friendSnap) => {
-          if (friendSnap.exists()) {
-            inviteBtn.textContent = "Connected";
-            inviteBtn.disabled = true;
-            inviteBtn.style.opacity = "0.6";
-            inviteBtn.style.cursor = "default";
-          } else {
-            // Check invite status if not connected
-            db.ref(`invites/${user.id}/${currentUser.id}`).on("value", (invSnap) => {
-              if (invSnap.exists()) {
-                inviteBtn.textContent = "Invited ⏳";
-                inviteBtn.disabled = true;
-              } else {
-                inviteBtn.textContent = "Invite";
-                inviteBtn.disabled = false;
-                inviteBtn.style.opacity = "1";
-                inviteBtn.style.cursor = "pointer";
-              }
-            });
-          }
-        });
-
-        inviteBtn.onclick = (e) => {
-          e.stopPropagation();
-          if (inviteBtn.disabled) return;
-
-          db.ref(`invites/${user.id}/${currentUser.id}`).set({
-            senderName: currentUser.name,
-            senderPhone: currentUser.phone,
-            timestamp: Date.now()
-          });
-        };
-
         row.onclick = () => openChat(user);
-        row.appendChild(inviteBtn);
         panel.appendChild(row);
-      }
+      });
     });
   });
 }
 
+// Chats Tab - Shows ONLY contacts who have at least 1 message exchange
 function loadChats() {
   const panel = document.getElementById("list-panel");
-  panel.innerHTML = "<p style='text-align:center; color:var(--text-muted); padding:20px;'>Select Contacts tab to find users & start chatting.</p>";
+  panel.innerHTML = "";
+
+  db.ref(`friends/${currentUser.id}`).once("value", (friendsSnap) => {
+    if (!friendsSnap.exists()) {
+      panel.innerHTML = "<p style='text-align:center; color:var(--text-muted); padding:20px;'>No active chats available.</p>";
+      return;
+    }
+
+    friendsSnap.forEach((friendChild) => {
+      const friendId = friendChild.key;
+      const roomId = currentUser.id < friendId ? `${currentUser.id}_${friendId}` : `${friendId}_${currentUser.id}`;
+
+      db.ref(`messages/${roomId}`).limitToLast(1).once("value", (msgSnap) => {
+        if (msgSnap.exists()) {
+          db.ref(`users/${friendId}`).once("value", (userSnap) => {
+            const user = userSnap.val();
+            if (!user) return;
+
+            let lastMsgText = "";
+            msgSnap.forEach(m => lastMsgText = m.val().text);
+
+            const firstLetter = user.name ? user.name.charAt(0).toUpperCase() : "U";
+
+            const row = document.createElement("div");
+            row.className = "menu-item";
+            row.style.justifyContent = "space-between";
+
+            row.innerHTML = `
+              <div style="display:flex; align-items:center; gap:12px; width:100%;">
+                <div class="avatar-small">${firstLetter}</div>
+                <div style="flex:1; overflow:hidden;">
+                  <div style="font-weight:600;">${user.name}</div>
+                  <div style="font-size:13px; color:var(--text-muted); text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${lastMsgText}</div>
+                </div>
+              </div>
+            `;
+
+            row.onclick = () => openChat(user);
+            panel.appendChild(row);
+          });
+        }
+      });
+    });
+  });
 }
 
 // Open Active Chat Window
