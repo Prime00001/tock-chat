@@ -21,6 +21,7 @@ let selectedMsgId = null;
 let selectedMsgText = "";
 let isEditing = false;
 let longPressTimer = null;
+let typingTimeout = null;
 
 window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { 'size': 'invisible' });
 
@@ -78,13 +79,32 @@ function initApp() {
   loadChats();
 }
 
-// Online Presence
+// Online Presence & Auto Message Delivery Update
 function setupPresence() {
   const userStatusRef = db.ref(`status/${currentUser.id}`);
   db.ref(".info/connected").on("value", (snap) => {
     if (!snap.val()) return;
     userStatusRef.onDisconnect().set({ state: "Offline", lastSeen: Date.now() }).then(() => {
       userStatusRef.set({ state: "Online", lastSeen: Date.now() });
+      markIncomingMessagesAsDelivered();
+    });
+  });
+}
+
+function markIncomingMessagesAsDelivered() {
+  db.ref(`friends/${currentUser.id}`).once("value", (friendsSnap) => {
+    if (!friendsSnap.exists()) return;
+    friendsSnap.forEach((friendChild) => {
+      const friendId = friendChild.key;
+      const roomId = currentUser.id < friendId ? `${currentUser.id}_${friendId}` : `${friendId}_${currentUser.id}`;
+      
+      db.ref(`messages/${roomId}`).orderByChild("status").equalTo("sent").once("value", (msgSnap) => {
+        msgSnap.forEach((mChild) => {
+          if (mChild.val().senderId !== currentUser.id) {
+            db.ref(`messages/${roomId}/${mChild.key}`).update({ status: "delivered" });
+          }
+        });
+      });
     });
   });
 }
@@ -107,7 +127,6 @@ function loadContacts() {
   const panel = document.getElementById("list-panel");
   panel.innerHTML = "";
 
-  // Search UI UI Header
   const searchWrap = document.createElement("div");
   searchWrap.className = "search-box-wrap";
   searchWrap.innerHTML = `
@@ -124,7 +143,6 @@ function loadContacts() {
   friendsContainer.id = "friends-list-area";
   panel.appendChild(friendsContainer);
 
-  // Search Logic
   document.getElementById("contact-search-btn").onclick = () => {
     let inputPhone = document.getElementById("contact-search-input").value.trim();
     if (!inputPhone) return alert("Please enter a phone number!");
@@ -138,7 +156,6 @@ function loadContacts() {
     db.ref("users").orderByChild("phone").equalTo(inputPhone).once("value", (snap) => {
       resultsContainer.innerHTML = "";
       
-      // Case 1: Number has no account in Tock
       if (!snap.exists()) {
         resultsContainer.innerHTML = `
           <div style="text-align:center; padding:15px; color:var(--danger-color); font-size:14px;" class="menu-item">
@@ -148,7 +165,6 @@ function loadContacts() {
         return;
       }
 
-      // Case 2: Number exists in Tock
       snap.forEach((userChild) => {
         const foundUser = userChild.val();
         if (foundUser.id === currentUser.id) {
@@ -176,7 +192,6 @@ function loadContacts() {
         inviteBtn.className = "neu-btn sm primary";
         inviteBtn.textContent = "Invite";
 
-        // Check if already friends or already invited
         db.ref(`friends/${currentUser.id}/${foundUser.id}`).once("value", (fSnap) => {
           if (fSnap.exists()) {
             inviteBtn.textContent = "Connected";
@@ -204,7 +219,6 @@ function loadContacts() {
     });
   };
 
-  // Render Accepted Contacts
   db.ref(`friends/${currentUser.id}`).once("value", (friendsSnap) => {
     if (!friendsSnap.exists()) {
       friendsContainer.innerHTML = "<p style='text-align:center; color:var(--text-muted); padding:20px;'>No connected contacts yet.</p>";
@@ -242,7 +256,6 @@ function loadContacts() {
   });
 }
 
-// Chats Tab - Shows ONLY contacts who have at least 1 message exchange
 function loadChats() {
   const panel = document.getElementById("list-panel");
   panel.innerHTML = "";
@@ -323,93 +336,167 @@ function openChat(partner) {
   const roomId = currentUser.id < partner.id ? `${currentUser.id}_${partner.id}` : `${partner.id}_${currentUser.id}`;
   currentChatRef = db.ref(`messages/${roomId}`);
 
-  currentChatRef.on("child_added", (snap) => renderMessage(snap.key, snap.val()));
-}
+  currentChatRef.on("child_added", (snap) => {
+    const msg = snap.val();
+    const msgKey = snap.key;
 
-// Render Messages with Working 0.8s Press/Hold & Swipe-to-Reply
-function renderMessage(msgKey, msg) {
-  const container = document.getElementById("messages-container");
-  const bubble = document.createElement("div");
-  bubble.id = `msg-${msgKey}`;
-  const isOwn = msg.senderId === currentUser.id;
-  bubble.className = `msg-bubble ${isOwn ? "own" : "partner"}`;
-  bubble.innerHTML = `<div>${msg.text}</div><div class="msg-footer"><span>${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span></div>`;
-
-  const showFloatingBar = () => {
-    selectedMsgId = msgKey;
-    selectedMsgText = msg.text;
-
-    const bar = document.getElementById("floating-action-bar");
-    bar.classList.remove("hidden");
-
-    const bubbleTop = bubble.offsetTop;
-    const bubbleLeft = bubble.offsetLeft;
-
-    bar.style.top = `${Math.max(10, bubbleTop - 45)}px`;
-    if (isOwn) {
-      bar.style.right = "16px";
-      bar.style.left = "auto";
-    } else {
-      bar.style.left = `${Math.max(16, bubbleLeft)}px`;
-      bar.style.right = "auto";
-    }
-  };
-
-  // 0.8s (800ms) Press & Hold Logic
-  let isSwiping = false;
-
-  const startHold = () => {
-    isSwiping = false;
-    clearTimeout(longPressTimer);
-    longPressTimer = setTimeout(() => {
-      if (!isSwiping) showFloatingBar();
-    }, 800);
-  };
-
-  const cancelHold = () => clearTimeout(longPressTimer);
-
-  // Swipe Left or Right Logic
-  let startX = 0, currentX = 0;
-
-  bubble.addEventListener("touchstart", (e) => {
-    startX = e.touches[0].clientX;
-    currentX = startX;
-    startHold();
-  }, { passive: true });
-
-  bubble.addEventListener("touchmove", (e) => {
-    currentX = e.touches[0].clientX;
-    const diffX = currentX - startX;
-
-    if (Math.abs(diffX) > 10) {
-      isSwiping = true;
-      cancelHold();
+    if (msg.senderId !== currentUser.id && msg.status !== "seen") {
+      db.ref(`messages/${roomId}/${msgKey}`).update({ status: "seen" });
     }
 
-    if (Math.abs(diffX) < 100) {
-      bubble.style.transform = `translateX(${diffX}px)`;
-    }
-  }, { passive: true });
-
-  bubble.addEventListener("touchend", () => {
-    cancelHold();
-    const diffX = currentX - startX;
-    bubble.style.transform = "translateX(0px)";
-
-    if (Math.abs(diffX) > 40 && isSwiping) {
-      triggerReply(msg.text);
-    }
-
-    startX = 0;
-    currentX = 0;
-    isSwiping = false;
+    renderMessage(msgKey, msg);
   });
 
-  bubble.addEventListener("mousedown", startHold);
-  bubble.addEventListener("mouseup", cancelHold);
-  bubble.addEventListener("mouseleave", cancelHold);
+  currentChatRef.on("child_changed", (snap) => {
+    const msgKey = snap.key;
+    const updatedMsg = snap.val();
+    const msgElem = document.getElementById(`msg-${msgKey}`);
+    if (msgElem && updatedMsg.senderId === currentUser.id) {
+      const tickElem = msgElem.querySelector(".msg-status-ticks");
+      if (tickElem) {
+        if (updatedMsg.status === "seen") tickElem.textContent = " ✓✓✓";
+        else if (updatedMsg.status === "delivered") tickElem.textContent = " ✓✓";
+        else tickElem.textContent = " ✓";
+      }
+    }
+  });
 
-  container.appendChild(bubble);
+  // Typing Listener (বন্ধু টাইপ করছে কিনা পর্যবেক্ষণ করা)
+  db.ref(`typing/${roomId}/${partner.id}`).on("value", (tSnap) => {
+    const isTyping = tSnap.val();
+    const indicator = document.getElementById("typing-indicator");
+    if (isTyping) {
+      indicator.classList.remove("hidden");
+    } else {
+      indicator.classList.add("hidden");
+    }
+  });
+}
+
+// Typing Event Listener in Input Field
+document.getElementById("message-input").addEventListener("input", () => {
+  if (!activeChatPartner) return;
+  const roomId = currentUser.id < activeChatPartner.id ? `${currentUser.id}_${activeChatPartner.id}` : `${activeChatPartner.id}_${currentUser.id}`;
+  
+  // টাইপিং ট্রু সেট করা
+  db.ref(`typing/${roomId}/${currentUser.id}`).set(true);
+
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => {
+    // ২ সেকেন্ড পর ইনপুট না দিলে টাইপিং ফলস সেট করা
+    db.ref(`typing/${roomId}/${currentUser.id}`).set(false);
+  }, 2000);
+});
+
+// Render Messages
+function renderMessage(msgKey, msg) {
+  const container = document.getElementById("messages-container");
+  let bubble = document.getElementById(`msg-${msgKey}`);
+  const isOwn = msg.senderId === currentUser.id;
+
+  let statusTicks = "";
+  if (isOwn) {
+    if (msg.status === "seen") {
+      statusTicks = " ✓✓✓";
+    } else if (msg.status === "delivered") {
+      statusTicks = " ✓✓";
+    } else {
+      statusTicks = " ✓";
+    }
+  }
+
+  if (!bubble) {
+    bubble = document.createElement("div");
+    bubble.id = `msg-${msgKey}`;
+    bubble.className = `msg-bubble ${isOwn ? "own" : "partner"}`;
+    bubble.innerHTML = `
+      <div>${msg.text}</div>
+      <div class="msg-footer">
+        <span>${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+        <span class="msg-status-ticks" style="margin-left: 4px; font-weight: bold; color: var(--primary-color);">${statusTicks}</span>
+      </div>
+    `;
+
+    const showFloatingBar = () => {
+      selectedMsgId = msgKey;
+      selectedMsgText = msg.text;
+
+      const bar = document.getElementById("floating-action-bar");
+      bar.classList.remove("hidden");
+
+      const bubbleTop = bubble.offsetTop;
+      const bubbleLeft = bubble.offsetLeft;
+
+      bar.style.top = `${Math.max(10, bubbleTop - 45)}px`;
+      if (isOwn) {
+        bar.style.right = "16px";
+        bar.style.left = "auto";
+      } else {
+        bar.style.left = `${Math.max(16, bubbleLeft)}px`;
+        bar.style.right = "auto";
+      }
+    };
+
+    let isSwiping = false;
+
+    const startHold = () => {
+      isSwiping = false;
+      clearTimeout(longPressTimer);
+      longPressTimer = setTimeout(() => {
+        if (!isSwiping) showFloatingBar();
+      }, 800);
+    };
+
+    const cancelHold = () => clearTimeout(longPressTimer);
+
+    let startX = 0, currentX = 0;
+
+    bubble.addEventListener("touchstart", (e) => {
+      startX = e.touches[0].clientX;
+      currentX = startX;
+      startHold();
+    }, { passive: true });
+
+    bubble.addEventListener("touchmove", (e) => {
+      currentX = e.touches[0].clientX;
+      const diffX = currentX - startX;
+
+      if (Math.abs(diffX) > 10) {
+        isSwiping = true;
+        cancelHold();
+      }
+
+      if (Math.abs(diffX) < 100) {
+        bubble.style.transform = `translateX(${diffX}px)`;
+      }
+    }, { passive: true });
+
+    bubble.addEventListener("touchend", () => {
+      cancelHold();
+      const diffX = currentX - startX;
+      bubble.style.transform = "translateX(0px)";
+
+      if (Math.abs(diffX) > 40 && isSwiping) {
+        triggerReply(msg.text);
+      }
+
+      startX = 0;
+      currentX = 0;
+      isSwiping = false;
+    });
+
+    bubble.addEventListener("mousedown", startHold);
+    bubble.addEventListener("mouseup", cancelHold);
+    bubble.addEventListener("mouseleave", cancelHold);
+
+    container.appendChild(bubble);
+  } else {
+    const tickElem = bubble.querySelector(".msg-status-ticks");
+    if (tickElem && isOwn) {
+      tickElem.textContent = statusTicks;
+    }
+  }
+
   container.scrollTop = container.scrollHeight;
 }
 
@@ -487,14 +574,23 @@ document.getElementById("send-btn").onclick = () => {
 
   const roomId = currentUser.id < activeChatPartner.id ? `${currentUser.id}_${activeChatPartner.id}` : `${activeChatPartner.id}_${currentUser.id}`;
 
+  // মেসেজ সেন্ড করার পর টাইপিং বন্ধ করা
+  db.ref(`typing/${roomId}/${currentUser.id}`).set(false);
+
   if (isEditing && selectedMsgId) {
     db.ref(`messages/${roomId}/${selectedMsgId}`).update({ text: text });
     isEditing = false;
   } else {
-    db.ref(`messages/${roomId}`).push({
-      senderId: currentUser.id,
-      text: text,
-      timestamp: Date.now()
+    db.ref(`status/${activeChatPartner.id}`).once("value", (statusSnap) => {
+      const partnerStatus = statusSnap.val();
+      const initialStatus = (partnerStatus && partnerStatus.state === "Online") ? "delivered" : "sent";
+
+      db.ref(`messages/${roomId}`).push({
+        senderId: currentUser.id,
+        text: text,
+        timestamp: Date.now(),
+        status: initialStatus
+      });
     });
   }
 
@@ -502,7 +598,7 @@ document.getElementById("send-btn").onclick = () => {
   document.getElementById("reply-preview-box").classList.add("hidden");
 };
 
-// Listen Notifications with Neumorphic Accept Button
+// Listen Notifications
 function listenNotifications() {
   db.ref(`invites/${currentUser.id}`).on("value", (snap) => {
     const notifList = document.getElementById("notif-list");
