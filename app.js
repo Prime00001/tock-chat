@@ -102,7 +102,7 @@ document.getElementById("tab-contacts").onclick = function() {
   loadContacts();
 };
 
-// Contacts List
+// Contacts List with Connection Check
 function loadContacts() {
   const panel = document.getElementById("list-panel");
   panel.innerHTML = "";
@@ -130,16 +130,33 @@ function loadContacts() {
         const inviteBtn = document.createElement("button");
         inviteBtn.className = "neu-btn sm";
 
-        db.ref(`invites/${user.id}/${currentUser.id}`).on("value", (invSnap) => {
-          if (invSnap.exists()) {
-            inviteBtn.textContent = "Invited ⏳";
+        // Check Connection / Friends status
+        db.ref(`friends/${currentUser.id}/${user.id}`).on("value", (friendSnap) => {
+          if (friendSnap.exists()) {
+            inviteBtn.textContent = "Connected";
+            inviteBtn.disabled = true;
+            inviteBtn.style.opacity = "0.6";
+            inviteBtn.style.cursor = "default";
           } else {
-            inviteBtn.textContent = "Invite";
+            // Check invite status if not connected
+            db.ref(`invites/${user.id}/${currentUser.id}`).on("value", (invSnap) => {
+              if (invSnap.exists()) {
+                inviteBtn.textContent = "Invited ⏳";
+                inviteBtn.disabled = true;
+              } else {
+                inviteBtn.textContent = "Invite";
+                inviteBtn.disabled = false;
+                inviteBtn.style.opacity = "1";
+                inviteBtn.style.cursor = "pointer";
+              }
+            });
           }
         });
 
         inviteBtn.onclick = (e) => {
           e.stopPropagation();
+          if (inviteBtn.disabled) return;
+
           db.ref(`invites/${user.id}/${currentUser.id}`).set({
             senderName: currentUser.name,
             senderPhone: currentUser.phone,
@@ -371,6 +388,57 @@ document.getElementById("send-btn").onclick = () => {
   document.getElementById("reply-preview-box").classList.add("hidden");
 };
 
+// Listen Notifications with Neumorphic Accept Button
+function listenNotifications() {
+  db.ref(`invites/${currentUser.id}`).on("value", (snap) => {
+    const notifList = document.getElementById("notif-list");
+    notifList.innerHTML = "";
+
+    document.querySelectorAll(".notif-badge-elem").forEach(b => {
+      if (snap.exists()) b.classList.add("active");
+      else b.classList.remove("active");
+    });
+
+    if (snap.exists()) {
+      snap.forEach((child) => {
+        const senderId = child.key;
+        const inv = child.val();
+        
+        const div = document.createElement("div");
+        div.className = "menu-item";
+        div.style.justifyContent = "space-between";
+        div.style.alignItems = "center";
+
+        div.innerHTML = `
+          <span><strong>${inv.senderName}</strong> sent you a chat invite.</span>
+        `;
+
+        // Neumorphic Accept Button
+        const acceptBtn = document.createElement("button");
+        acceptBtn.className = "neu-btn sm primary";
+        acceptBtn.textContent = "Accept";
+
+        acceptBtn.onclick = () => {
+          // Connect both users as friends
+          db.ref(`friends/${currentUser.id}/${senderId}`).set(true);
+          db.ref(`friends/${senderId}/${currentUser.id}`).set(true);
+
+          // Clear invite entries
+          db.ref(`invites/${currentUser.id}/${senderId}`).remove();
+          db.ref(`invites/${senderId}/${currentUser.id}`).remove();
+
+          alert(`${inv.senderName}-এর ইনভাইট অ্যাকসেপ্ট করা হয়েছে!`);
+        };
+
+        div.appendChild(acceptBtn);
+        notifList.appendChild(div);
+      });
+    } else {
+      notifList.innerHTML = "<p style='text-align:center; color:var(--text-muted);'>No new notifications</p>";
+    }
+  });
+}
+
 // Modals Setup
 document.getElementById("chat-info-btn").onclick = () => {
   if (!activeChatPartner) return;
@@ -386,31 +454,6 @@ document.querySelectorAll(".notif-btn-trigger").forEach(btn => {
   btn.onclick = () => document.getElementById("notif-modal").classList.remove("hidden");
 });
 document.getElementById("close-notif-btn").onclick = () => document.getElementById("notif-modal").classList.add("hidden");
-
-function listenNotifications() {
-  db.ref(`invites/${currentUser.id}`).on("value", (snap) => {
-    const notifList = document.getElementById("notif-list");
-    notifList.innerHTML = "";
-
-    document.querySelectorAll(".notif-badge-elem").forEach(b => {
-      if (snap.exists()) b.classList.add("active");
-      else b.classList.remove("active");
-    });
-
-    if (snap.exists()) {
-      snap.forEach((child) => {
-        const inv = child.val();
-        const div = document.createElement("div");
-        div.className = "menu-item";
-        div.style.justifyContent = "space-between";
-        div.innerHTML = `<span><strong>${inv.senderName}</strong> sent you a chat invite.</span>`;
-        notifList.appendChild(div);
-      });
-    } else {
-      notifList.innerHTML = "<p style='text-align:center; color:var(--text-muted);'>No new notifications</p>";
-    }
-  });
-}
 
 document.getElementById("main-menu-btn").onclick = () => document.getElementById("main-menu-modal").classList.remove("hidden");
 document.getElementById("menu-my-profile").onclick = () => {
