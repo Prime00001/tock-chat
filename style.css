@@ -221,6 +221,16 @@ body {
   padding: 10px;
 }
 
+.search-box-wrap {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+.search-box-wrap input {
+  flex: 1;
+}
+
 .menu-item {
   display: flex;
   align-items: center;

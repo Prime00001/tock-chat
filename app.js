@@ -102,14 +102,112 @@ document.getElementById("tab-contacts").onclick = function() {
   loadContacts();
 };
 
-// Contacts Tab - Shows ONLY users whose chat invites have been accepted
+// Contacts Tab - Search input + Accepted Friends List
 function loadContacts() {
   const panel = document.getElementById("list-panel");
   panel.innerHTML = "";
 
+  // Search UI UI Header
+  const searchWrap = document.createElement("div");
+  searchWrap.className = "search-box-wrap";
+  searchWrap.innerHTML = `
+    <input type="tel" id="contact-search-input" class="neu-input" placeholder="Search phone (e.g. 01700000000)" />
+    <button id="contact-search-btn" class="neu-btn primary">Search</button>
+  `;
+  panel.appendChild(searchWrap);
+
+  const resultsContainer = document.createElement("div");
+  resultsContainer.id = "search-results-area";
+  panel.appendChild(resultsContainer);
+
+  const friendsContainer = document.createElement("div");
+  friendsContainer.id = "friends-list-area";
+  panel.appendChild(friendsContainer);
+
+  // Search Logic
+  document.getElementById("contact-search-btn").onclick = () => {
+    let inputPhone = document.getElementById("contact-search-input").value.trim();
+    if (!inputPhone) return alert("Please enter a phone number!");
+
+    if (inputPhone.startsWith("01")) inputPhone = "+88" + inputPhone;
+    else if (inputPhone.startsWith("8801")) inputPhone = "+" + inputPhone;
+    inputPhone = inputPhone.replace(/[\s-]/g, "");
+
+    resultsContainer.innerHTML = "<p style='text-align:center; padding:10px; color:var(--text-muted);'>Searching...</p>";
+
+    db.ref("users").orderByChild("phone").equalTo(inputPhone).once("value", (snap) => {
+      resultsContainer.innerHTML = "";
+      
+      // Case 1: Number has no account in Tock
+      if (!snap.exists()) {
+        resultsContainer.innerHTML = `
+          <div style="text-align:center; padding:15px; color:var(--danger-color); font-size:14px;" class="menu-item">
+            Currently this number may not have account in tock
+          </div>
+        `;
+        return;
+      }
+
+      // Case 2: Number exists in Tock
+      snap.forEach((userChild) => {
+        const foundUser = userChild.val();
+        if (foundUser.id === currentUser.id) {
+          resultsContainer.innerHTML = `<div style="text-align:center; padding:10px; color:var(--text-muted);" class="menu-item">This is your own phone number.</div>`;
+          return;
+        }
+
+        const firstLetter = foundUser.name ? foundUser.name.charAt(0).toUpperCase() : "U";
+
+        const row = document.createElement("div");
+        row.className = "menu-item";
+        row.style.justifyContent = "space-between";
+
+        row.innerHTML = `
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div class="avatar-small">${firstLetter}</div>
+            <div>
+              <div style="font-weight:600;">${foundUser.name}</div>
+              <div style="font-size:12px; color:var(--text-muted);">${foundUser.phone}</div>
+            </div>
+          </div>
+        `;
+
+        const inviteBtn = document.createElement("button");
+        inviteBtn.className = "neu-btn sm primary";
+        inviteBtn.textContent = "Invite";
+
+        // Check if already friends or already invited
+        db.ref(`friends/${currentUser.id}/${foundUser.id}`).once("value", (fSnap) => {
+          if (fSnap.exists()) {
+            inviteBtn.textContent = "Connected";
+            inviteBtn.disabled = true;
+            inviteBtn.style.opacity = "0.7";
+          }
+        });
+
+        inviteBtn.onclick = (e) => {
+          e.stopPropagation();
+          db.ref(`invites/${foundUser.id}/${currentUser.id}`).set({
+            senderName: currentUser.name,
+            senderPhone: currentUser.phone,
+            timestamp: Date.now()
+          }).then(() => {
+            alert(`Invite sent to ${foundUser.name}!`);
+            inviteBtn.textContent = "Sent";
+            inviteBtn.disabled = true;
+          });
+        };
+
+        row.appendChild(inviteBtn);
+        resultsContainer.appendChild(row);
+      });
+    });
+  };
+
+  // Render Accepted Contacts
   db.ref(`friends/${currentUser.id}`).once("value", (friendsSnap) => {
     if (!friendsSnap.exists()) {
-      panel.innerHTML = "<p style='text-align:center; color:var(--text-muted); padding:20px;'>No contacts yet. Accept invites to add friends!</p>";
+      friendsContainer.innerHTML = "<p style='text-align:center; color:var(--text-muted); padding:20px;'>No connected contacts yet.</p>";
       return;
     }
 
@@ -138,7 +236,7 @@ function loadContacts() {
         `;
 
         row.onclick = () => openChat(user);
-        panel.appendChild(row);
+        friendsContainer.appendChild(row);
       });
     });
   });
@@ -429,21 +527,18 @@ function listenNotifications() {
           <span><strong>${inv.senderName}</strong> sent you a chat invite.</span>
         `;
 
-        // Neumorphic Accept Button
         const acceptBtn = document.createElement("button");
         acceptBtn.className = "neu-btn sm primary";
         acceptBtn.textContent = "Accept";
 
         acceptBtn.onclick = () => {
-          // Connect both users as friends
           db.ref(`friends/${currentUser.id}/${senderId}`).set(true);
           db.ref(`friends/${senderId}/${currentUser.id}`).set(true);
 
-          // Clear invite entries
           db.ref(`invites/${currentUser.id}/${senderId}`).remove();
           db.ref(`invites/${senderId}/${currentUser.id}`).remove();
 
-          alert(`${inv.senderName}-এর ইনভাইট অ্যাকসেপ্ট করা হয়েছে!`);
+          alert(`Accepted invite from ${inv.senderName}!`);
         };
 
         div.appendChild(acceptBtn);
