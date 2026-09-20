@@ -79,26 +79,32 @@ function initApp() {
   loadChats();
 }
 
-// Online Presence & Auto Message Delivery Update
+// Online Presence & Background Auto-Delivery (Messenger Logic)
 function setupPresence() {
   const userStatusRef = db.ref(`status/${currentUser.id}`);
+  
   db.ref(".info/connected").on("value", (snap) => {
     if (!snap.val()) return;
+    
     userStatusRef.onDisconnect().set({ state: "Offline", lastSeen: Date.now() }).then(() => {
       userStatusRef.set({ state: "Online", lastSeen: Date.now() });
-      markIncomingMessagesAsDelivered();
+      
+      // অনলাইনে আসার সাথে সাথেই ব্যাকগ্রাউন্ডে সব 'sent' মেসেজকে 'delivered' বানাবে
+      listenAndMarkAllIncomingMessagesAsDelivered();
     });
   });
 }
 
-function markIncomingMessagesAsDelivered() {
+function listenAndMarkAllIncomingMessagesAsDelivered() {
   db.ref(`friends/${currentUser.id}`).once("value", (friendsSnap) => {
     if (!friendsSnap.exists()) return;
+    
     friendsSnap.forEach((friendChild) => {
       const friendId = friendChild.key;
       const roomId = currentUser.id < friendId ? `${currentUser.id}_${friendId}` : `${friendId}_${currentUser.id}`;
       
-      db.ref(`messages/${roomId}`).orderByChild("status").equalTo("sent").once("value", (msgSnap) => {
+      // রিয়েলটাইমে মনিটর করবে, মেসেজ আসা মাত্রই চ্যাটে না ঢুকলেও Delivered হয়ে যাবে
+      db.ref(`messages/${roomId}`).orderByChild("status").equalTo("sent").on("value", (msgSnap) => {
         msgSnap.forEach((mChild) => {
           if (mChild.val().senderId !== currentUser.id) {
             db.ref(`messages/${roomId}/${mChild.key}`).update({ status: "delivered" });
@@ -122,7 +128,7 @@ document.getElementById("tab-contacts").onclick = function() {
   loadContacts();
 };
 
-// Contacts Tab - Search input + Accepted Friends List
+// Contacts Tab
 function loadContacts() {
   const panel = document.getElementById("list-panel");
   panel.innerHTML = "";
@@ -256,6 +262,7 @@ function loadContacts() {
   });
 }
 
+// Chats List with Indicator Logic
 function loadChats() {
   const panel = document.getElementById("list-panel");
   panel.innerHTML = "";
@@ -270,14 +277,30 @@ function loadChats() {
       const friendId = friendChild.key;
       const roomId = currentUser.id < friendId ? `${currentUser.id}_${friendId}` : `${friendId}_${currentUser.id}`;
 
-      db.ref(`messages/${roomId}`).limitToLast(1).once("value", (msgSnap) => {
+      db.ref(`messages/${roomId}`).once("value", (msgSnap) => {
         if (msgSnap.exists()) {
+          let unseenCount = 0;
+          msgSnap.forEach((mChild) => {
+            const m = mChild.val();
+            if (m.senderId !== currentUser.id && m.status !== "seen") {
+              unseenCount++;
+            }
+          });
+
           db.ref(`users/${friendId}`).once("value", (userSnap) => {
             const user = userSnap.val();
             if (!user) return;
 
-            let lastMsgText = "";
-            msgSnap.forEach(m => lastMsgText = m.val().text);
+            let indicatorText = "";
+            let textStyle = "color: var(--text-muted);";
+
+            if (unseenCount === 1) {
+              indicatorText = "new message";
+              textStyle = "color: var(--primary-color); font-weight: 600;";
+            } else if (unseenCount > 1) {
+              indicatorText = `${unseenCount} new messages`;
+              textStyle = "color: var(--primary-color); font-weight: 600;";
+            }
 
             const firstLetter = user.name ? user.name.charAt(0).toUpperCase() : "U";
 
@@ -290,7 +313,9 @@ function loadChats() {
                 <div class="avatar-small">${firstLetter}</div>
                 <div style="flex:1; overflow:hidden;">
                   <div style="font-weight:600;">${user.name}</div>
-                  <div style="font-size:13px; color:var(--text-muted); text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${lastMsgText}</div>
+                  <div style="font-size:13px; ${textStyle} text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
+                    ${indicatorText}
+                  </div>
                 </div>
               </div>
             `;
@@ -304,7 +329,7 @@ function loadChats() {
   });
 }
 
-// Open Active Chat Window
+// Open Active Chat Window (Triggers 'seen' status)
 function openChat(partner) {
   activeChatPartner = partner;
   document.getElementById("chat-screen").classList.remove("hidden");
@@ -340,6 +365,7 @@ function openChat(partner) {
     const msg = snap.val();
     const msgKey = snap.key;
 
+    // চ্যাটে প্রবেশের পর মেসেজগুলো Seen এ আপডেট হওয়া
     if (msg.senderId !== currentUser.id && msg.status !== "seen") {
       db.ref(`messages/${roomId}/${msgKey}`).update({ status: "seen" });
     }
@@ -347,6 +373,7 @@ function openChat(partner) {
     renderMessage(msgKey, msg);
   });
 
+  // রিয়েলটাইমে মেসেজ টিক মার্ক আপডেট (✓ -> ✓✓ -> ✓✓✓)
   currentChatRef.on("child_changed", (snap) => {
     const msgKey = snap.key;
     const updatedMsg = snap.val();
@@ -361,7 +388,7 @@ function openChat(partner) {
     }
   });
 
-  // Typing Listener (বন্ধু টাইপ করছে কিনা পর্যবেক্ষণ করা)
+  // Typing Listener
   db.ref(`typing/${roomId}/${partner.id}`).on("value", (tSnap) => {
     const isTyping = tSnap.val();
     const indicator = document.getElementById("typing-indicator");
@@ -373,22 +400,20 @@ function openChat(partner) {
   });
 }
 
-// Typing Event Listener in Input Field
+// Typing Event Listener
 document.getElementById("message-input").addEventListener("input", () => {
   if (!activeChatPartner) return;
   const roomId = currentUser.id < activeChatPartner.id ? `${currentUser.id}_${activeChatPartner.id}` : `${activeChatPartner.id}_${currentUser.id}`;
   
-  // টাইপিং ট্রু সেট করা
   db.ref(`typing/${roomId}/${currentUser.id}`).set(true);
 
   clearTimeout(typingTimeout);
   typingTimeout = setTimeout(() => {
-    // ২ সেকেন্ড পর ইনপুট না দিলে টাইপিং ফলস সেট করা
     db.ref(`typing/${roomId}/${currentUser.id}`).set(false);
   }, 2000);
 });
 
-// Render Messages
+// Render Messages Function
 function renderMessage(msgKey, msg) {
   const container = document.getElementById("messages-container");
   let bubble = document.getElementById(`msg-${msgKey}`);
@@ -559,7 +584,7 @@ document.getElementById("unpin-btn").onclick = () => {
   document.getElementById("pinned-banner").classList.add("hidden");
 };
 
-// Send / Edit Execution
+// Send / Edit Execution with Instant Sent/Delivered Logic
 document.getElementById("message-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
@@ -574,13 +599,13 @@ document.getElementById("send-btn").onclick = () => {
 
   const roomId = currentUser.id < activeChatPartner.id ? `${currentUser.id}_${activeChatPartner.id}` : `${activeChatPartner.id}_${currentUser.id}`;
 
-  // মেসেজ সেন্ড করার পর টাইপিং বন্ধ করা
   db.ref(`typing/${roomId}/${currentUser.id}`).set(false);
 
   if (isEditing && selectedMsgId) {
     db.ref(`messages/${roomId}/${selectedMsgId}`).update({ text: text });
     isEditing = false;
   } else {
+    // প্রাপক অনলাইনে থাকলে সাথে সাথেই Delivered সেট হবে, না থাকলে Sent
     db.ref(`status/${activeChatPartner.id}`).once("value", (statusSnap) => {
       const partnerStatus = statusSnap.val();
       const initialStatus = (partnerStatus && partnerStatus.state === "Online") ? "delivered" : "sent";
@@ -682,5 +707,9 @@ document.getElementById("save-profile-btn").onclick = () => {
 };
 document.getElementById("close-profile-btn").onclick = () => document.getElementById("edit-profile-modal").classList.add("hidden");
 
-document.getElementById("chat-back-btn").onclick = () => document.getElementById("chat-screen").classList.add("hidden");
+document.getElementById("chat-back-btn").onclick = () => {
+  document.getElementById("chat-screen").classList.add("hidden");
+  loadChats();
+};
+
 document.getElementById("menu-logout").onclick = () => location.reload();
