@@ -88,8 +88,6 @@ function setupPresence() {
     
     userStatusRef.onDisconnect().set({ state: "Offline", lastSeen: Date.now() }).then(() => {
       userStatusRef.set({ state: "Online", lastSeen: Date.now() });
-      
-      // অনলাইনে আসার সাথে সাথেই ব্যাকগ্রাউন্ডে সব 'sent' মেসেজকে 'delivered' বানাবে
       listenAndMarkAllIncomingMessagesAsDelivered();
     });
   });
@@ -103,7 +101,6 @@ function listenAndMarkAllIncomingMessagesAsDelivered() {
       const friendId = friendChild.key;
       const roomId = currentUser.id < friendId ? `${currentUser.id}_${friendId}` : `${friendId}_${currentUser.id}`;
       
-      // রিয়েলটাইমে মনিটর করবে, মেসেজ আসা মাত্রই চ্যাটে না ঢুকলেও Delivered হয়ে যাবে
       db.ref(`messages/${roomId}`).orderByChild("status").equalTo("sent").on("value", (msgSnap) => {
         msgSnap.forEach((mChild) => {
           if (mChild.val().senderId !== currentUser.id) {
@@ -329,7 +326,7 @@ function loadChats() {
   });
 }
 
-// Open Active Chat Window (Triggers 'seen' status)
+// Open Active Chat Window
 function openChat(partner) {
   activeChatPartner = partner;
   document.getElementById("chat-screen").classList.remove("hidden");
@@ -365,7 +362,6 @@ function openChat(partner) {
     const msg = snap.val();
     const msgKey = snap.key;
 
-    // চ্যাটে প্রবেশের পর মেসেজগুলো Seen এ আপডেট হওয়া
     if (msg.senderId !== currentUser.id && msg.status !== "seen") {
       db.ref(`messages/${roomId}/${msgKey}`).update({ status: "seen" });
     }
@@ -373,7 +369,6 @@ function openChat(partner) {
     renderMessage(msgKey, msg);
   });
 
-  // রিয়েলটাইমে মেসেজ টিক মার্ক আপডেট (✓ -> ✓✓ -> ✓✓✓)
   currentChatRef.on("child_changed", (snap) => {
     const msgKey = snap.key;
     const updatedMsg = snap.val();
@@ -413,7 +408,7 @@ document.getElementById("message-input").addEventListener("input", () => {
   }, 2000);
 });
 
-// Render Messages Function
+// Render Messages Function (Updated with Neumorphic Quoted Header & Touch/Swipe Fixes)
 function renderMessage(msgKey, msg) {
   const container = document.getElementById("messages-container");
   let bubble = document.getElementById(`msg-${msgKey}`);
@@ -421,27 +416,57 @@ function renderMessage(msgKey, msg) {
 
   let statusTicks = "";
   if (isOwn) {
-    if (msg.status === "seen") {
-      statusTicks = " ✓✓✓";
-    } else if (msg.status === "delivered") {
-      statusTicks = " ✓✓";
-    } else {
-      statusTicks = " ✓";
-    }
+    if (msg.status === "seen") statusTicks = " ✓✓✓";
+    else if (msg.status === "delivered") statusTicks = " ✓✓";
+    else statusTicks = " ✓";
   }
 
   if (!bubble) {
     bubble = document.createElement("div");
     bubble.id = `msg-${msgKey}`;
     bubble.className = `msg-bubble ${isOwn ? "own" : "partner"}`;
+
+    // Neumorphic Quoted Header UI Logic
+    let quoteHTML = "";
+    if (msg.replyToText) {
+      quoteHTML = `
+        <div class="neu-quoted-header" data-target-id="${msg.replyToId || ''}">
+          <div class="quoted-bar"></div>
+          <div class="quoted-content">
+            <span class="quoted-title">${msg.replyToSender || 'Replied'}</span>
+            <span class="quoted-text">${msg.replyToText}</span>
+          </div>
+        </div>
+      `;
+    }
+
     bubble.innerHTML = `
-      <div>${msg.text}</div>
+      ${quoteHTML}
+      <div class="msg-content">${msg.text}</div>
       <div class="msg-footer">
         <span>${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
         <span class="msg-status-ticks" style="margin-left: 4px; font-weight: bold; color: var(--primary-color);">${statusTicks}</span>
       </div>
     `;
 
+    // Click Quoted Header -> Scroll To Original Message
+    const quoteElem = bubble.querySelector(".neu-quoted-header");
+    if (quoteElem) {
+      quoteElem.onclick = (e) => {
+        e.stopPropagation();
+        const targetId = quoteElem.getAttribute("data-target-id");
+        if (targetId) {
+          const targetMsgElem = document.getElementById(`msg-${targetId}`);
+          if (targetMsgElem) {
+            targetMsgElem.scrollIntoView({ behavior: "smooth", block: "center" });
+            targetMsgElem.classList.add("highlight-pulse");
+            setTimeout(() => targetMsgElem.classList.remove("highlight-pulse"), 2000);
+          }
+        }
+      };
+    }
+
+    // Floating Bar Position Logic (Dynamic & Infinite Scroll Friendly)
     const showFloatingBar = () => {
       selectedMsgId = msgKey;
       selectedMsgText = msg.text;
@@ -449,33 +474,33 @@ function renderMessage(msgKey, msg) {
       const bar = document.getElementById("floating-action-bar");
       bar.classList.remove("hidden");
 
-      const bubbleTop = bubble.offsetTop;
-      const bubbleLeft = bubble.offsetLeft;
+      const bubbleTop = bubble.offsetTop - container.scrollTop;
 
       bar.style.top = `${Math.max(10, bubbleTop - 45)}px`;
       if (isOwn) {
         bar.style.right = "16px";
         bar.style.left = "auto";
       } else {
-        bar.style.left = `${Math.max(16, bubbleLeft)}px`;
+        bar.style.left = `${Math.max(16, bubble.offsetLeft)}px`;
         bar.style.right = "auto";
       }
     };
 
-    let isSwiping = false;
+    let startX = 0;
+    let currentX = 0;
+    let isDragging = false;
 
     const startHold = () => {
-      isSwiping = false;
+      isDragging = false;
       clearTimeout(longPressTimer);
       longPressTimer = setTimeout(() => {
-        if (!isSwiping) showFloatingBar();
+        if (!isDragging) showFloatingBar();
       }, 800);
     };
 
     const cancelHold = () => clearTimeout(longPressTimer);
 
-    let startX = 0, currentX = 0;
-
+    // --- Touch Events (Mobile Swipe Right) ---
     bubble.addEventListener("touchstart", (e) => {
       startX = e.touches[0].clientX;
       currentX = startX;
@@ -486,13 +511,10 @@ function renderMessage(msgKey, msg) {
       currentX = e.touches[0].clientX;
       const diffX = currentX - startX;
 
-      if (Math.abs(diffX) > 10) {
-        isSwiping = true;
+      if (diffX > 10) {
+        isDragging = true;
         cancelHold();
-      }
-
-      if (Math.abs(diffX) < 100) {
-        bubble.style.transform = `translateX(${diffX}px)`;
+        if (diffX < 80) bubble.style.transform = `translateX(${diffX}px)`;
       }
     }, { passive: true });
 
@@ -501,18 +523,45 @@ function renderMessage(msgKey, msg) {
       const diffX = currentX - startX;
       bubble.style.transform = "translateX(0px)";
 
-      if (Math.abs(diffX) > 40 && isSwiping) {
-        triggerReply(msg.text);
+      if (diffX > 40 && isDragging) {
+        triggerReply(msgKey, msg.text, isOwn ? currentUser.name : activeChatPartner.name);
       }
-
-      startX = 0;
-      currentX = 0;
-      isSwiping = false;
+      isDragging = false;
     });
 
-    bubble.addEventListener("mousedown", startHold);
-    bubble.addEventListener("mouseup", cancelHold);
-    bubble.addEventListener("mouseleave", cancelHold);
+    // --- Mouse Events (Desktop Swipe Right) ---
+    bubble.addEventListener("mousedown", (e) => {
+      startX = e.clientX;
+      currentX = startX;
+      startHold();
+
+      const onMouseMove = (moveEvent) => {
+        currentX = moveEvent.clientX;
+        const diffX = currentX - startX;
+        if (diffX > 10) {
+          isDragging = true;
+          cancelHold();
+          if (diffX < 80) bubble.style.transform = `translateX(${diffX}px)`;
+        }
+      };
+
+      const onMouseUp = () => {
+        cancelHold();
+        const diffX = currentX - startX;
+        bubble.style.transform = "translateX(0px)";
+
+        if (diffX > 40 && isDragging) {
+          triggerReply(msgKey, msg.text, isOwn ? currentUser.name : activeChatPartner.name);
+        }
+
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        isDragging = false;
+      };
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
 
     container.appendChild(bubble);
   } else {
@@ -532,21 +581,37 @@ document.getElementById("messages-container").addEventListener("click", (e) => {
   }
 });
 
-function triggerReply(text) {
+let replyTargetId = null;
+let replyTargetSender = "";
+
+function triggerReply(msgId, text, senderName) {
+  selectedMsgId = msgId;
   selectedMsgText = text;
-  document.getElementById("reply-preview-box").classList.remove("hidden");
-  document.getElementById("reply-preview-text").textContent = `Replying: ${text}`;
+  replyTargetId = msgId;
+  replyTargetSender = senderName || (activeChatPartner ? activeChatPartner.name : "User");
+
+  const previewBox = document.getElementById("reply-preview-box");
+  const previewText = document.getElementById("reply-preview-text");
+  
+  if (previewBox && previewText) {
+    previewBox.classList.remove("hidden");
+    previewText.textContent = `${replyTargetSender}: ${text}`;
+  }
+  
+  document.getElementById("floating-action-bar").classList.add("hidden");
   document.getElementById("message-input").focus();
 }
 
 document.getElementById("cancel-reply-btn").onclick = () => {
   document.getElementById("reply-preview-box").classList.add("hidden");
+  replyTargetId = null;
+  replyTargetSender = "";
 };
 
 // Neumorphic Bar Actions
 document.getElementById("act-reply").onclick = () => {
-  triggerReply(selectedMsgText);
-  document.getElementById("floating-action-bar").classList.add("hidden");
+  const isOwn = selectedMsgId ? document.getElementById(`msg-${selectedMsgId}`)?.classList.contains("own") : false;
+  triggerReply(selectedMsgId, selectedMsgText, isOwn ? currentUser.name : activeChatPartner.name);
 };
 
 document.getElementById("act-edit").onclick = () => {
@@ -584,7 +649,7 @@ document.getElementById("unpin-btn").onclick = () => {
   document.getElementById("pinned-banner").classList.add("hidden");
 };
 
-// Send / Edit Execution with Instant Sent/Delivered Logic
+// Send / Edit Execution with Quoted Header Data Payload
 document.getElementById("message-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
@@ -605,21 +670,32 @@ document.getElementById("send-btn").onclick = () => {
     db.ref(`messages/${roomId}/${selectedMsgId}`).update({ text: text });
     isEditing = false;
   } else {
-    // প্রাপক অনলাইনে থাকলে সাথে সাথেই Delivered সেট হবে, না থাকলে Sent
     db.ref(`status/${activeChatPartner.id}`).once("value", (statusSnap) => {
       const partnerStatus = statusSnap.val();
       const initialStatus = (partnerStatus && partnerStatus.state === "Online") ? "delivered" : "sent";
 
-      db.ref(`messages/${roomId}`).push({
+      const payload = {
         senderId: currentUser.id,
         text: text,
         timestamp: Date.now(),
         status: initialStatus
-      });
+      };
+
+      // If Replying to a Message
+      const replyBox = document.getElementById("reply-preview-box");
+      if (replyBox && !replyBox.classList.contains("hidden") && replyTargetId) {
+        payload.replyToId = replyTargetId;
+        payload.replyToText = selectedMsgText;
+        payload.replyToSender = replyTargetSender;
+      }
+
+      db.ref(`messages/${roomId}`).push(payload);
     });
   }
 
   input.value = "";
+  replyTargetId = null;
+  replyTargetSender = "";
   document.getElementById("reply-preview-box").classList.add("hidden");
 };
 
