@@ -23,13 +23,15 @@ let isEditing = false;
 let longPressTimer = null;
 let typingTimeout = null;
 
+let replyTargetId = null;
+let replyTargetSender = "";
+
 window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { 'size': 'invisible' });
 
 // Global Theme Switcher
 document.querySelectorAll(".theme-btn-trigger").forEach(btn => {
   btn.onclick = () => {
     document.body.classList.toggle("lite-theme");
-    document.body.classList.toggle("dark-theme");
   };
 });
 
@@ -79,7 +81,7 @@ function initApp() {
   loadChats();
 }
 
-// Online Presence & Background Auto-Delivery (Messenger Logic)
+// Online Presence & Background Auto-Delivery
 function setupPresence() {
   const userStatusRef = db.ref(`status/${currentUser.id}`);
   
@@ -132,6 +134,8 @@ function loadContacts() {
 
   const searchWrap = document.createElement("div");
   searchWrap.className = "search-box-wrap";
+  searchWrap.style.display = "flex";
+  searchWrap.style.gap = "8px";
   searchWrap.innerHTML = `
     <input type="tel" id="contact-search-input" class="neu-input" placeholder="Search phone (e.g. 01700000000)" />
     <button id="contact-search-btn" class="neu-btn primary">Search</button>
@@ -259,7 +263,7 @@ function loadContacts() {
   });
 }
 
-// Chats List with Indicator Logic
+// Chats List
 function loadChats() {
   const panel = document.getElementById("list-panel");
   panel.innerHTML = "";
@@ -326,7 +330,7 @@ function loadChats() {
   });
 }
 
-// Open Active Chat Window
+// Open Active Chat
 function openChat(partner) {
   activeChatPartner = partner;
   document.getElementById("chat-screen").classList.remove("hidden");
@@ -387,15 +391,14 @@ function openChat(partner) {
   db.ref(`typing/${roomId}/${partner.id}`).on("value", (tSnap) => {
     const isTyping = tSnap.val();
     const indicator = document.getElementById("typing-indicator");
-    if (isTyping) {
-      indicator.classList.remove("hidden");
-    } else {
-      indicator.classList.add("hidden");
+    if (indicator) {
+      if (isTyping) indicator.classList.remove("hidden");
+      else indicator.classList.add("hidden");
     }
   });
 }
 
-// Typing Event Listener
+// Typing Event
 document.getElementById("message-input").addEventListener("input", () => {
   if (!activeChatPartner) return;
   const roomId = currentUser.id < activeChatPartner.id ? `${currentUser.id}_${activeChatPartner.id}` : `${activeChatPartner.id}_${currentUser.id}`;
@@ -408,7 +411,7 @@ document.getElementById("message-input").addEventListener("input", () => {
   }, 2000);
 });
 
-// Render Messages Function (Updated with Neumorphic Quoted Header & Touch/Swipe Fixes)
+// Render Messages with Modern Neumorphic Quoted Header
 function renderMessage(msgKey, msg) {
   const container = document.getElementById("messages-container");
   let bubble = document.getElementById(`msg-${msgKey}`);
@@ -426,7 +429,6 @@ function renderMessage(msgKey, msg) {
     bubble.id = `msg-${msgKey}`;
     bubble.className = `msg-bubble ${isOwn ? "own" : "partner"}`;
 
-    // Neumorphic Quoted Header UI Logic
     let quoteHTML = "";
     if (msg.replyToText) {
       quoteHTML = `
@@ -449,7 +451,7 @@ function renderMessage(msgKey, msg) {
       </div>
     `;
 
-    // Click Quoted Header -> Scroll To Original Message
+    // Click Quoted Header -> Scroll To Target Message
     const quoteElem = bubble.querySelector(".neu-quoted-header");
     if (quoteElem) {
       quoteElem.onclick = (e) => {
@@ -460,13 +462,13 @@ function renderMessage(msgKey, msg) {
           if (targetMsgElem) {
             targetMsgElem.scrollIntoView({ behavior: "smooth", block: "center" });
             targetMsgElem.classList.add("highlight-pulse");
-            setTimeout(() => targetMsgElem.classList.remove("highlight-pulse"), 2000);
+            setTimeout(() => targetMsgElem.classList.remove("highlight-pulse"), 1200);
           }
         }
       };
     }
 
-    // Floating Bar Position Logic (Dynamic & Infinite Scroll Friendly)
+    // Dynamic Floating Action Bar Position Logic
     const showFloatingBar = () => {
       selectedMsgId = msgKey;
       selectedMsgText = msg.text;
@@ -581,9 +583,6 @@ document.getElementById("messages-container").addEventListener("click", (e) => {
   }
 });
 
-let replyTargetId = null;
-let replyTargetSender = "";
-
 function triggerReply(msgId, text, senderName) {
   selectedMsgId = msgId;
   selectedMsgText = text;
@@ -649,7 +648,7 @@ document.getElementById("unpin-btn").onclick = () => {
   document.getElementById("pinned-banner").classList.add("hidden");
 };
 
-// Send / Edit Execution with Quoted Header Data Payload
+// Send / Edit Logic with Quoted Header Data Payload
 document.getElementById("message-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
@@ -681,7 +680,6 @@ document.getElementById("send-btn").onclick = () => {
         status: initialStatus
       };
 
-      // If Replying to a Message
       const replyBox = document.getElementById("reply-preview-box");
       if (replyBox && !replyBox.classList.contains("hidden") && replyTargetId) {
         payload.replyToId = replyTargetId;
@@ -699,7 +697,7 @@ document.getElementById("send-btn").onclick = () => {
   document.getElementById("reply-preview-box").classList.add("hidden");
 };
 
-// Listen Notifications
+// Notifications Listener
 function listenNotifications() {
   db.ref(`invites/${currentUser.id}`).on("value", (snap) => {
     const notifList = document.getElementById("notif-list");
