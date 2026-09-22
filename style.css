@@ -562,3 +562,31 @@ body {
     box-shadow: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light);
   }
 }
+
+/* --- Header Typing Indicator Styles --- */
+.partner-status.typing {
+  color: var(--primary-color);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.header-typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 2px;
+}
+
+.header-typing-dots span {
+  width: 4px;
+  height: 4px;
+  background-color: var(--primary-color);
+  border-radius: 50%;
+  box-shadow: 1px 1px 2px var(--shadow-dark), -1px -1px 2px var(--shadow-light);
+  animation: typingBounce 1.4s infinite ease-in-out both;
+}
+
+.header-typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+.header-typing-dots span:nth-child(2) { animation-delay: -0.16s; }

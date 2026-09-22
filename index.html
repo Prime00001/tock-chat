@@ -1,171 +1,188 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="eng">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tock Chat</title>
-  <link rel="stylesheet" href="style.css" />
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tock - Neumorphic Messenger</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-<body class="dark-theme">
+<body>
 
-  <!-- Authentication Screen -->
-  <div id="auth-screen" class="auth-wrapper">
+  <!-- AUTHENTICATION VIEW -->
+  <div id="authView" class="auth-wrapper">
     <div class="auth-card neu-card">
-      <button class="theme-btn-trigger neu-btn icon-only-btn" title="Toggle Theme">
-        <span class="theme-icon">🌙</span>
+      <button class="neu-btn icon-only-btn theme-btn-trigger" id="authThemeToggle" title="Toggle Theme">
+        🌙
       </button>
-
+      
       <div class="auth-header">
-        <h2>Welcome to Tock</h2>
-        <p>Enter your details to continue</p>
+        <h2>Tock</h2>
+        <p id="authSubtitle">আপনার অ্যাকাউন্টে লগইন করুন</p>
       </div>
 
-      <!-- Step 1: Phone & Name Input -->
-      <div id="phone-step" class="auth-step">
+      <!-- Login Form -->
+      <form id="loginForm">
         <div class="input-group">
-          <input type="text" id="auth-name" class="neu-input" placeholder="Your Name" required />
+          <input type="email" id="loginEmail" class="neu-input" placeholder="ইমেইল এড্রেস" required>
         </div>
         <div class="input-group">
-          <input type="tel" id="auth-phone" class="neu-input" placeholder="Phone (e.g. 01700000000)" required />
+          <input type="password" id="loginPassword" class="neu-input" placeholder="পাসওয়ার্ড" required>
         </div>
-        <div id="recaptcha-container"></div>
-        <button id="send-otp-btn" class="neu-btn primary full-width">Send OTP</button>
-      </div>
+        <button type="submit" class="neu-btn primary full-width">লগইন করুন</button>
+        <p style="margin-top: 15px; font-size: 13px;" class="text-center">
+          একাউন্ট নেই? <a href="#" id="switchToRegister" style="color: var(--primary-color);">রেজিস্টার করুন</a>
+        </p>
+      </form>
 
-      <!-- Step 2: OTP Input -->
-      <div id="otp-step" class="auth-step hidden">
+      <!-- Register Form -->
+      <form id="registerForm" class="hidden">
         <div class="input-group">
-          <input type="number" id="auth-otp" class="neu-input" placeholder="Enter 6-digit OTP" required />
+          <input type="text" id="regName" class="neu-input" placeholder="আপনার নাম" required>
         </div>
-        <button id="verify-otp-btn" class="neu-btn primary full-width">Verify & Login</button>
-      </div>
+        <div class="input-group">
+          <input type="email" id="regEmail" class="neu-input" placeholder="ইমেইল এড্রেস" required>
+        </div>
+        <div class="input-group">
+          <input type="password" id="regPassword" class="neu-input" placeholder="পাসওয়ার্ড" required>
+        </div>
+        <button type="submit" class="neu-btn primary full-width">একাউন্ট তৈরি করুন</button>
+        <p style="margin-top: 15px; font-size: 13px;" class="text-center">
+          ইতিমধ্যে একাউন্ট আছে? <a href="#" id="switchToLogin" style="color: var(--primary-color);">লগইন করুন</a>
+        </p>
+      </form>
     </div>
   </div>
 
-  <!-- Main App Container -->
-  <div id="app-container" class="app-layout hidden">
-    <!-- Main Top Bar -->
+  <!-- MAIN APP VIEW -->
+  <div id="appView" class="app-layout hidden">
+    
+    <!-- Top Bar -->
     <header class="top-bar neu-card">
-      <button id="main-menu-btn" class="neu-btn icon-only-btn">☰</button>
-      <h1 class="brand-title">Tock</h1>
+      <div class="brand-title">Tock</div>
       <div class="top-actions">
-        <button class="theme-btn-trigger neu-btn icon-only-btn">🌙</button>
-        <button class="notif-btn-trigger neu-btn icon-only-btn relative">
-          🔔 <span class="notif-badge-elem"></span>
+        <button class="neu-btn icon-only-btn relative" id="notifBtn" title="নোটিফিকেশন">
+          🔔
+          <span class="notif-badge-elem" id="notifBadge"></span>
+        </button>
+        <button class="neu-btn icon-only-btn" id="appThemeToggle" title="থিম পরিবর্তন">
+          🌙
         </button>
       </div>
     </header>
 
     <!-- Navigation Tabs -->
-    <div class="nav-tabs">
-      <button id="tab-chats" class="tab-btn active">Chats</button>
-      <button id="tab-contacts" class="tab-btn">Contacts</button>
-    </div>
+    <nav class="nav-tabs">
+      <button class="tab-btn active" id="tabChats">চ্যাটস</button>
+      <button class="tab-btn" id="tabRequests">রিকোয়েস্ট</button>
+      <button class="tab-btn" id="tabProfile">প্রোফাইল</button>
+    </nav>
 
-    <!-- Contacts / Chats List Panel -->
-    <main id="list-panel" class="content-panel"></main>
-
-    <!-- Active Chat Screen Overlay -->
-    <div id="chat-screen" class="chat-overlay hidden">
-      <header class="chat-header neu-card">
-        <button id="chat-back-btn" class="neu-btn icon-only-btn">←</button>
-        <div id="chat-info-btn" class="chat-user-details">
-          <div id="chat-partner-avatar" class="avatar-small">U</div>
-          <div>
-            <div id="chat-partner-name" class="partner-name">User</div>
-            <div id="chat-partner-status" class="partner-status">Offline</div>
-          </div>
+    <!-- Content Panels -->
+    <main class="content-panel">
+      
+      <!-- CHATS PANEL -->
+      <section id="panelChats">
+        <div class="search-box-wrap">
+          <input type="text" id="searchChatsInput" class="neu-input" placeholder="ইউজার বা চ্যাট খুঁজুন...">
         </div>
-      </header>
+        <div id="chatsList">
+          <!-- Chat list items will be injected here dynamically -->
+        </div>
+      </section>
 
-      <!-- Neumorphic Typing Indicator Bar -->
-      <div id="typing-indicator" class="typing-box hidden neu-card">
-        <span>typing</span>
-        <div class="typing-dots">
-          <span class="dot"></span>
-          <span class="dot"></span>
-          <span class="dot"></span>
+      <!-- REQUESTS PANEL -->
+      <section id="panelRequests" class="hidden">
+        <div class="search-box-wrap">
+          <input type="email" id="requestEmailInput" class="neu-input" placeholder="ইমেইল দিয়ে ইউজার খুঁজুন...">
+          <button class="neu-btn primary" id="sendReqBtn">পাঠান</button>
+        </div>
+        <h3>ফ্রেন্ড রিকোয়েস্টসমূহ</h3>
+        <div id="requestsList" style="margin-top: 10px;">
+          <!-- Request list items will be injected dynamically -->
+        </div>
+      </section>
+
+      <!-- PROFILE PANEL -->
+      <section id="panelProfile" class="hidden">
+        <div class="neu-card" style="padding: 20px; text-align: center;">
+          <div class="avatar-large" id="profileAvatar" style="margin: 0 auto 15px auto;">U</div>
+          <h2 id="profileName">User Name</h2>
+          <p id="profileEmail" style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">user@example.com</p>
+          
+          <button class="neu-btn danger full-width" id="logoutBtn">লগআউট করুন</button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- CHAT SCREEN OVERLAY -->
+    <div id="chatScreen" class="chat-overlay hidden">
+      <div class="chat-header neu-card">
+        <button class="neu-btn icon-only-btn" id="closeChatBtn">⬅</button>
+        <div class="chat-user-details" id="chatHeaderUser">
+          <div class="avatar-small" id="chatPartnerAvatar">U</div>
+          <div>
+            <div class="partner-name" id="chatPartnerName">User</div>
+            <div class="partner-status" id="chatPartnerStatus">Online</div>
+          </div>
         </div>
       </div>
 
       <!-- Pinned Message Banner -->
-      <div id="pinned-banner" class="pinned-banner hidden neu-card">
-        <div class="pinned-text">📌 <span id="pinned-msg-text">Pinned Message</span></div>
-        <button id="unpin-btn" class="neu-btn sm">Unpin</button>
+      <div id="pinnedBanner" class="pinned-banner neu-card hidden">
+        <span id="pinnedText">পিন করা মেসেজ...</span>
+        <button class="neu-btn sm" id="unpinBtn">আনপিন</button>
       </div>
 
-      <!-- Messages Stream -->
-      <div id="messages-container" class="messages-container"></div>
+      <!-- Messages Area -->
+      <div class="messages-container" id="messagesContainer">
+        <!-- Message bubbles dynamically populated here -->
+      </div>
 
-      <!-- Floating Neumorphic Action Bar for Selected Message -->
-      <div id="floating-action-bar" class="floating-action-bar hidden neu-card">
-        <button id="act-reply" class="neu-btn sm" title="Reply">↩ Reply</button>
-        <button id="act-edit" class="neu-btn sm" title="Edit">✏️ Edit</button>
-        <button id="act-pin" class="neu-btn sm" title="Pin">📌 Pin</button>
-        <button id="act-delete" class="neu-btn sm danger" title="Delete">🗑️ Delete</button>
+      <!-- Typing Indicator inside chat -->
+      <div id="typingIndicator" class="typing-box neu-card hidden">
+        <span id="typingUserName">কেউ একজন</span> টাইপ করছেন...
+        <div class="typing-dots">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
       </div>
 
       <!-- Reply Preview Bar -->
-      <div id="reply-preview-box" class="reply-preview hidden neu-card">
-        <span id="reply-preview-text">Replying...</span>
-        <button id="cancel-reply-btn" class="neu-btn sm">✕</button>
+      <div id="replyPreviewBar" class="reply-preview neu-card hidden">
+        <div>
+          <small style="color: var(--primary-color);">রিপ্লাই দিচ্ছেন:</small>
+          <p id="replyPreviewText" style="font-size: 13px; color: var(--text-muted);"></p>
+        </div>
+        <button class="neu-btn sm danger" id="cancelReplyBtn">✕</button>
       </div>
 
-      <!-- Message Input Bar -->
-      <div class="chat-input-bar neu-card">
-        <input type="text" id="message-input" class="neu-input" placeholder="Type a message..." />
-        <button id="send-btn" class="neu-btn primary">Send</button>
+      <!-- Input Bar -->
+      <div class="chat-input-bar">
+        <input type="text" id="msgInput" class="neu-input" placeholder="মেসেজ লিখুন...">
+        <button class="neu-btn primary icon-only-btn" id="sendMsgBtn">➔</button>
       </div>
     </div>
+
   </div>
 
-  <!-- Notifications Modal -->
-  <div id="notif-modal" class="modal-overlay hidden">
+  <!-- FLOATING ACTION BAR FOR MESSAGES (CONTEXT MENU) -->
+  <div id="floatingActionBar" class="floating-action-bar neu-card hidden">
+    <button class="neu-btn sm" id="actionReply">রিপ্লাই</button>
+    <button class="neu-btn sm" id="actionCopy">কপি</button>
+    <button class="neu-btn sm" id="actionPin">পিন</button>
+    <button class="neu-btn sm danger" id="actionDelete">ডিলিট</button>
+  </div>
+
+  <!-- NOTIFICATION MODAL -->
+  <div id="notifModal" class="modal-overlay hidden">
     <div class="modal-card neu-card">
-      <h3>Notifications</h3>
-      <div id="notif-list" class="modal-body"></div>
-      <button id="close-notif-btn" class="neu-btn full-width" style="margin-top: 15px;">Close</button>
-    </div>
-  </div>
-
-  <!-- User Details / Partner Info Modal -->
-  <div id="info-modal" class="modal-overlay hidden">
-    <div class="modal-card neu-card text-center">
-      <div id="info-avatar" class="avatar-large" style="margin:0 auto 10px auto;">U</div>
-      <h3 id="info-name">User Name</h3>
-      <p id="info-phone" style="color:var(--text-muted); margin-bottom: 20px;">Phone</p>
-      <button id="info-close-modal" class="neu-btn full-width">Close</button>
-    </div>
-  </div>
-
-  <!-- Main Menu Modal -->
-  <div id="main-menu-modal" class="modal-overlay hidden">
-    <div class="modal-card neu-card">
-      <h3>Menu</h3>
-      <div class="menu-list">
-        <button id="menu-my-profile" class="neu-btn full-width" style="margin-bottom: 10px;">My Profile</button>
-        <button id="menu-logout" class="neu-btn full-width danger">Logout</button>
+      <h3>নোটিফিকেশনসমূহ</h3>
+      <div id="notifList" style="max-height: 250px; overflow-y: auto; margin-bottom: 15px;">
+        <!-- Notification list -->
       </div>
-    </div>
-  </div>
-
-  <!-- Edit Profile Modal -->
-  <div id="edit-profile-modal" class="modal-overlay hidden">
-    <div class="modal-card neu-card">
-      <h3>My Profile</h3>
-      <div class="avatar-large" id="my-avatar" style="margin: 0 auto 15px auto;">U</div>
-      <div class="input-group">
-        <input type="text" id="edit-name-input" class="neu-input" placeholder="Name" />
-      </div>
-      <div class="input-group">
-        <input type="text" id="edit-bio-input" class="neu-input" placeholder="Bio" />
-      </div>
-      <button id="save-profile-btn" class="neu-btn primary full-width" style="margin-bottom: 10px;">Save Profile</button>
-      <button id="close-profile-btn" class="neu-btn full-width">Cancel</button>
+      <button class="neu-btn full-width" id="closeNotifModalBtn">বন্ধ করুন</button>
     </div>
   </div>
 

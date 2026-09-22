@@ -787,3 +787,28 @@ document.getElementById("chat-back-btn").onclick = () => {
 };
 
 document.getElementById("menu-logout").onclick = () => location.reload();
+
+// হেডার টাইপিং ইন্ডিকেটর দেখানোর জন্য
+function showHeaderTyping(statusText = 'typing') {
+  const statusElem = document.getElementById('chatPartnerStatus');
+  if (!statusElem) return;
+  
+  statusElem.classList.add('typing');
+  statusElem.innerHTML = `
+    ${statusText}
+    <span class="header-typing-dots">
+      <span></span>
+      <span></span>
+      <span></span>
+    </span>
+  `;
+}
+
+// সাধারণ স্ট্যাটাসে ফিরে যাওয়ার জন্য (যেমন: Online / Offline)
+function hideHeaderTyping(defaultStatus = 'Online') {
+  const statusElem = document.getElementById('chatPartnerStatus');
+  if (!statusElem) return;
+  
+  statusElem.classList.remove('typing');
+  statusElem.textContent = defaultStatus;
+}
