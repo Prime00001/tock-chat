@@ -115,13 +115,22 @@
         <button id="cancel-reply-btn" class="neu-btn sm">✕</button>
       </div>
 
-      <!-- Message Input Bar with 3D Neumorphic Animated Share Button -->
+      <!-- Message Input Bar with Upload/Share SVG Button -->
       <div class="chat-input-bar neu-card">
-        <input type="file" id="image-input" accept="image/*" class="hidden" />
+        <input type="file" id="media-input" accept="image/*,video/*,.pdf,.doc,.docx,.txt" class="hidden" />
         
-        <!-- 3D Neumorphic Animated Image Button -->
-        <button id="attach-btn" class="neu-btn icon-only-btn neu-btn-3d" type="button" title="Share Image">
-          <span class="btn-icon">📷</span>
+        <!-- Upload / Share Button with Theme-based SVG icons -->
+        <button id="attach-btn" class="neu-btn icon-only-btn neu-btn-3d" type="button" title="Share Media/File">
+          <!-- Dark Theme Share SVG Icon (Shown in Dark Mode) -->
+          <svg class="share-icon-dark" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 15V3m0 0l-4 4m4-4l4 4"></path>
+            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
+          </svg>
+          <!-- Lite Theme Share SVG Icon (Shown in Lite Mode) -->
+          <svg class="share-icon-lite hidden" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 15V3m0 0l-4 4m4-4l4 4"></path>
+            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
+          </svg>
         </button>
 
         <input type="text" id="message-input" class="neu-input" placeholder="Type a message..." />
