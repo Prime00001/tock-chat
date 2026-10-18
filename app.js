@@ -1,37 +1,100 @@
+// --- Firebase Initialization ---
+const firebaseConfig = {
+  apiKey: "AIzaSyDsS9YG4esj-PT3iBzzW3__98pwxdCtZvg",
+  authDomain: "tock-1fd0e.firebaseapp.com",
+  databaseURL: "https://tock-1fd0e-default-rtdb.firebaseio.com",
+  projectId: "tock-1fd0e",
+  storageBucket: "tock-1fd0e.firebasestorage.app",
+  messagingSenderId: "704452309911",
+  appId: "1:704452309911:web:a8da0db3a31b57a00f4ad2"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+
 document.addEventListener('DOMContentLoaded', () => {
+  // Global State Variables
+  let currentUser = null;
+  let activeChatPartner = null;
   let activeReplyTarget = null;
   let selectedMsgElement = null;
   let selectedMediaFile = null;
+  let confirmationResult = null;
+
+
 
   // DOM Elements Selection
+  const authScreen = document.getElementById('auth-screen');
+  const appContainer = document.getElementById('app-container');
+  const phoneStep = document.getElementById('phone-step');
+  const otpStep = document.getElementById('otp-step');
+  const authNameInput = document.getElementById('auth-name');
+  const authPhoneInput = document.getElementById('auth-phone');
+  const authOtpInput = document.getElementById('auth-otp');
+  const sendOtpBtn = document.getElementById('send-otp-btn');
+  const verifyOtpBtn = document.getElementById('verify-otp-btn');
+
+  const mainNavTabs = document.querySelectorAll('.nav-tabs .tab-btn');
+  const listPanel = document.getElementById('list-panel');
+  const chatScreen = document.getElementById('chat-screen');
+  const chatBackBtn = document.getElementById('chat-back-btn');
+  const chatInfoBtn = document.getElementById('chat-info-btn');
+  const chatPartnerAvatar = document.getElementById('chat-partner-avatar');
+  const chatPartnerName = document.getElementById('chat-partner-name');
+  const chatPartnerStatus = document.getElementById('chat-partner-status');
+
   const messagesContainer = document.getElementById('messages-container');
   const floatingActionBar = document.getElementById('floating-action-bar');
   const replyBtn = document.getElementById('act-reply');
+  const editBtn = document.getElementById('act-edit');
+  const pinBtn = document.getElementById('act-pin');
+  const deleteBtn = document.getElementById('act-delete');
+
   const replyPreviewBox = document.getElementById('reply-preview-box');
   const replyPreviewText = document.getElementById('reply-preview-text');
   const cancelReplyBtn = document.getElementById('cancel-reply-btn');
+
   const messageInput = document.getElementById('message-input');
   const sendBtn = document.getElementById('send-btn');
-  const themeTriggers = document.querySelectorAll('.theme-btn-trigger');
-  
   const attachBtn = document.getElementById('attach-btn');
   const mediaInput = document.getElementById('media-input');
 
-  // Modals & Menu Elements
-  const mainMenuBtn = document.getElementById('main-menu-btn');
-  const mainMenuModal = document.getElementById('main-menu-modal');
-  const notifBtnTrigger = document.querySelector('.notif-btn-trigger');
+  const themeTriggers = document.querySelectorAll('.theme-btn-trigger');
+  const notifTrigger = document.querySelector('.notif-btn-trigger');
   const notifModal = document.getElementById('notif-modal');
   const closeNotifBtn = document.getElementById('close-notif-btn');
-  const chatBackBtn = document.getElementById('chat-back-btn');
-  const chatScreen = document.getElementById('chat-screen');
 
-  // 1. Theme Toggle & SVG Icon Switcher
+  const infoModal = document.getElementById('info-modal');
+  const infoCloseModal = document.getElementById('info-close-modal');
+  const infoAvatar = document.getElementById('info-avatar');
+  const infoName = document.getElementById('info-name');
+  const infoPhone = document.getElementById('info-phone');
+
+  const mainMenuBtn = document.getElementById('main-menu-btn');
+  const mainMenuModal = document.getElementById('main-menu-modal');
+  const menuMyProfile = document.getElementById('menu-my-profile');
+  const menuLogout = document.getElementById('menu-logout');
+
+  const editProfileModal = document.getElementById('edit-profile-modal');
+  const editNameInput = document.getElementById('edit-name-input');
+  const editBioInput = document.getElementById('edit-bio-input');
+  const saveProfileBtn = document.getElementById('save-profile-btn');
+  const closeProfileBtn = document.getElementById('close-profile-btn');
+
+  const typingIndicator = document.getElementById('typing-indicator');
+  const pinnedBanner = document.getElementById('pinned-banner');
+  const pinnedMsgText = document.getElementById('pinned-msg-text');
+  const unpinBtn = document.getElementById('unpin-btn');
+
+  // -------------------------------------------------------------
+  // 1. Theme Switcher with SVG Toggle for Upload Icon
+  // -------------------------------------------------------------
   themeTriggers.forEach(trigger => {
     trigger.addEventListener('click', () => {
       document.body.classList.toggle('lite-theme');
       const isLite = document.body.classList.contains('lite-theme');
-      
+
       const darkShareIcon = document.querySelector('.share-icon-dark');
       const liteShareIcon = document.querySelector('.share-icon-lite');
 
@@ -47,30 +110,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 2. Modals Management
-  if (mainMenuBtn && mainMenuModal) {
-    mainMenuBtn.addEventListener('click', () => mainMenuModal.classList.remove('hidden'));
-    mainMenuModal.addEventListener('click', (e) => {
-      if (e.target === mainMenuModal) mainMenuModal.classList.add('hidden');
-    });
-  }
-
-  if (notifBtnTrigger && notifModal) {
-    notifBtnTrigger.addEventListener('click', () => notifModal.classList.remove('hidden'));
-  }
-  if (closeNotifBtn) {
-    closeNotifBtn.addEventListener('click', () => notifModal.classList.add('hidden'));
-  }
-
-  if (chatBackBtn && chatScreen) {
-    chatBackBtn.addEventListener('click', () => {
-      chatScreen.classList.add('hidden');
-      clearReplyState();
-      hideFloatingBar();
-    });
-  }
-
-  // 3. Attachment File Loader (Images, Videos, Documents)
+  // -------------------------------------------------------------
+  // 2. Attach Media Button Event Listeners
+  // -------------------------------------------------------------
   if (attachBtn && mediaInput) {
     attachBtn.addEventListener('click', () => {
       mediaInput.click();
@@ -97,10 +139,94 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 4. Message Stream Interaction (Select Message & Quoted Auto-Scroll)
+  // -------------------------------------------------------------
+  // 3. Navigation Tabs Switching
+  // -------------------------------------------------------------
+  mainNavTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      mainNavTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      if (tab.id === 'tab-chats') {
+        renderChatsList();
+      } else {
+        renderContactsList();
+      }
+    });
+  });
+
+  function renderChatsList() {
+    listPanel.innerHTML = `
+      <div class="search-box-wrap">
+        <input type="text" class="neu-input" placeholder="Search chats..." />
+      </div>
+      <div class="menu-item" onclick="openChat('user_alex', 'Alex Vance', 'Online')">
+        <div class="avatar-small">A</div>
+        <div style="margin-left: 12px; flex: 1;">
+          <div style="font-weight: 700;">Alex Vance</div>
+          <div style="font-size: 12px; color: var(--text-muted);">Hey, how is Tock project going?</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderContactsList() {
+    listPanel.innerHTML = `
+      <div class="search-box-wrap">
+        <input type="text" class="neu-input" placeholder="Search contacts..." />
+      </div>
+      <div class="menu-item" onclick="openChat('user_alex', 'Alex Vance', 'Online')">
+        <div class="avatar-small">A</div>
+        <div style="margin-left: 12px;">
+          <div style="font-weight: 700;">Alex Vance</div>
+          <div style="font-size: 12px; color: var(--text-muted);">01700000000</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Initialize view
+  renderChatsList();
+
+  // -------------------------------------------------------------
+  // 4. Open & Close Active Chat Screen
+  // -------------------------------------------------------------
+  window.openChat = function(userId, userName, status) {
+    activeChatPartner = { id: userId, name: userName, status: status };
+    chatPartnerAvatar.innerText = userName.charAt(0).toUpperCase();
+    chatPartnerName.innerText = userName;
+    chatPartnerStatus.innerText = status;
+    chatScreen.classList.remove('hidden');
+  };
+
+  if (chatBackBtn) {
+    chatBackBtn.addEventListener('click', () => {
+      chatScreen.classList.add('hidden');
+      activeChatPartner = null;
+    });
+  }
+
+  if (chatInfoBtn) {
+    chatInfoBtn.addEventListener('click', () => {
+      if (!activeChatPartner) return;
+      infoAvatar.innerText = activeChatPartner.name.charAt(0).toUpperCase();
+      infoName.innerText = activeChatPartner.name;
+      infoPhone.innerText = 'Phone: +8801700000000';
+      infoModal.classList.remove('hidden');
+    });
+  }
+
+  if (infoCloseModal) {
+    infoCloseModal.addEventListener('click', () => {
+      infoModal.classList.add('hidden');
+    });
+  }
+
+  // -------------------------------------------------------------
+  // 5. Message Selection & Floating Action Bar
+  // -------------------------------------------------------------
   if (messagesContainer) {
     messagesContainer.addEventListener('click', (e) => {
-      // Auto-scroll on clicking a quoted reply box
+      // Quoted Reply Scroll logic
       const quotedHeader = e.target.closest('.quoted-reply-box');
       if (quotedHeader) {
         const targetId = quotedHeader.dataset.targetId;
@@ -131,15 +257,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 5. Floating Action Bar Logic
+  // Action Bar Triggers
   if (replyBtn) {
     replyBtn.addEventListener('click', () => {
       if (!selectedMsgElement) return;
 
       const msgId = selectedMsgElement.dataset.id;
       const isOwn = selectedMsgElement.classList.contains('own');
-      const senderName = isOwn ? 'You' : 'User';
-      
+      const senderName = isOwn ? 'You' : (activeChatPartner ? activeChatPartner.name : 'User');
+
       const textNode = selectedMsgElement.querySelector('.msg-text');
       const msgText = textNode ? textNode.innerText : 'Attachment';
 
@@ -152,6 +278,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
       hideFloatingBar();
       if (messageInput) messageInput.focus();
+    });
+  }
+
+  if (pinBtn) {
+    pinBtn.addEventListener('click', () => {
+      if (!selectedMsgElement) return;
+      const textNode = selectedMsgElement.querySelector('.msg-text');
+      const msgText = textNode ? textNode.innerText : 'Pinned Media';
+      pinnedMsgText.innerText = msgText;
+      pinnedBanner.classList.remove('hidden');
+      hideFloatingBar();
+    });
+  }
+
+  if (unpinBtn) {
+    unpinBtn.addEventListener('click', () => {
+      pinnedBanner.classList.add('hidden');
+    });
+  }
+
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', () => {
+      if (selectedMsgElement) {
+        selectedMsgElement.remove();
+        hideFloatingBar();
+      }
     });
   }
 
@@ -169,7 +321,9 @@ document.addEventListener('DOMContentLoaded', () => {
     selectedMsgElement = null;
   }
 
-  // 6. Send Message with Attachments & Download Option
+  // -------------------------------------------------------------
+  // 6. Send Message Logic (Supports Attachments & Download Buttons)
+  // -------------------------------------------------------------
   if (sendBtn && messageInput) {
     sendBtn.addEventListener('click', sendMessage);
     messageInput.addEventListener('keypress', (e) => {
@@ -186,7 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
     msgBubble.className = 'msg-bubble own';
     msgBubble.dataset.id = newMsgId;
 
-    // Inline Quoted Reply Preview
+    // Quoted Reply Header
     let replyHeaderHtml = '';
     if (activeReplyTarget) {
       replyHeaderHtml = `
@@ -197,7 +351,7 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
     }
 
-    // Attachment Element with Left Download Button
+    // Attachment Layout with Left Corner Download SVG Button
     let mediaHtml = '';
     if (selectedMediaFile) {
       const dlBtnHtml = `
@@ -242,7 +396,7 @@ document.addEventListener('DOMContentLoaded', () => {
     messagesContainer.appendChild(msgBubble);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
-    // Reset Inputs and State
+    // Reset Input States
     messageInput.value = '';
     selectedMediaFile = null;
     if (mediaInput) mediaInput.value = '';
@@ -250,6 +404,70 @@ document.addEventListener('DOMContentLoaded', () => {
     clearReplyState();
   }
 
+  // -------------------------------------------------------------
+  // 7. Modals & Menu Event Listeners
+  // -------------------------------------------------------------
+  if (mainMenuBtn) {
+    mainMenuBtn.addEventListener('click', () => {
+      mainMenuModal.classList.remove('hidden');
+    });
+  }
+
+  if (menuMyProfile) {
+    menuMyProfile.addEventListener('click', () => {
+      mainMenuModal.classList.add('hidden');
+      editProfileModal.classList.remove('hidden');
+    });
+  }
+
+  if (closeProfileBtn) {
+    closeProfileBtn.addEventListener('click', () => {
+      editProfileModal.classList.add('hidden');
+    });
+  }
+
+  if (saveProfileBtn) {
+    saveProfileBtn.addEventListener('click', () => {
+      editProfileModal.classList.add('hidden');
+    });
+  }
+
+  if (menuLogout) {
+    menuLogout.addEventListener('click', () => {
+      mainMenuModal.classList.add('hidden');
+      appContainer.classList.add('hidden');
+      authScreen.classList.remove('hidden');
+    });
+  }
+
+  if (notifTrigger) {
+    notifTrigger.addEventListener('click', () => {
+      notifModal.classList.remove('hidden');
+    });
+  }
+
+  if (closeNotifBtn) {
+    closeNotifBtn.addEventListener('click', () => {
+      notifModal.classList.add('hidden');
+    });
+  }
+
+  // Dummy Auth Handler
+  if (sendOtpBtn) {
+    sendOtpBtn.addEventListener('click', () => {
+      phoneStep.classList.add('hidden');
+      otpStep.classList.remove('hidden');
+    });
+  }
+
+  if (verifyOtpBtn) {
+    verifyOtpBtn.addEventListener('click', () => {
+      authScreen.classList.add('hidden');
+      appContainer.classList.remove('hidden');
+    });
+  }
+
+  // Helper Function
   function escapeHtml(str) {
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
