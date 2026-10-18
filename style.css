@@ -591,20 +591,7 @@ body {
 .header-typing-dots span:nth-child(1) { animation-delay: -0.32s; }
 .header-typing-dots span:nth-child(2) { animation-delay: -0.16s; }
 
-/* --- 3D Neumorphic Button & Attachment Download Styles --- */
-.neu-btn-3d {
-  position: relative;
-  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.neu-btn-3d:hover {
-  transform: translateY(-2px) scale(1.05);
-}
-
-.neu-btn-3d:active {
-  transform: translateY(1px) scale(0.96);
-}
-
+/* --- Media Attachment & Download Button Styles --- */
 .media-preview-container {
   position: relative;
   display: inline-block;
@@ -615,10 +602,9 @@ body {
 .attachment-dl-btn {
   position: absolute;
   top: 8px;
-  left: 8px; /* Placed at top-left corner of attachment */
+  left: 8px;
   width: 32px;
   height: 32px;
-  padding: 0;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -628,7 +614,7 @@ body {
   color: var(--text-color);
   text-decoration: none;
   z-index: 5;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease;
 }
 
 .attachment-dl-btn:hover {
@@ -639,7 +625,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px 10px 48px; /* Left padding ensures space for download btn */
+  padding: 10px 14px 10px 48px;
   border-radius: 14px;
 }
 
