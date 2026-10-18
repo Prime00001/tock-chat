@@ -115,8 +115,15 @@
         <button id="cancel-reply-btn" class="neu-btn sm">✕</button>
       </div>
 
-      <!-- Message Input Bar -->
+      <!-- Message Input Bar with 3D Neumorphic Animated Share Button -->
       <div class="chat-input-bar neu-card">
+        <input type="file" id="image-input" accept="image/*" class="hidden" />
+        
+        <!-- 3D Neumorphic Animated Image Button -->
+        <button id="attach-btn" class="neu-btn icon-only-btn neu-btn-3d" type="button" title="Share Image">
+          <span class="btn-icon">📷</span>
+        </button>
+
         <input type="text" id="message-input" class="neu-input" placeholder="Type a message..." />
         <button id="send-btn" class="neu-btn primary">Send</button>
       </div>

@@ -812,3 +812,75 @@ function hideHeaderTyping(defaultStatus = 'Online') {
   statusElem.classList.remove('typing');
   statusElem.textContent = defaultStatus;
 }
+
+// DOM Selection
+const attachBtn = document.getElementById('attach-btn');
+const imageInput = document.getElementById('image-input');
+let selectedImageData = null; // ছবি স্টোর রাখার জন্য
+
+// 1. Attach বাটনে ক্লিক করলে ফাইল সিলেক্টর ওপেন হবে
+attachBtn.addEventListener('click', () => {
+  imageInput.click();
+});
+
+// 2. ছবি সিলেক্ট করা হলে তা Base64 স্ট্রিং হিসেবে রিড করা
+imageInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      selectedImageData = evt.target.result; // Base64 Image String
+      attachBtn.style.color = 'var(--primary-color)'; // সিলেক্ট হলে বাটন হাইলাইট
+    };
+    reader.readAsDataURL(file);
+  }
+});
+
+// 3. sendMessage() ফাংশন আপডেট (ছবি থাকলে মেসেজ বাবলে রেন্ডার করবে)
+function sendMessage() {
+  const text = chatInput.value.trim();
+  
+  // টেক্সট অথবা ছবি—যেকোনো একটি থাকলেই মেসেজ পাঠানো যাবে
+  if (!text && !selectedImageData) return;
+
+  const newMsgId = 'msg-' + Date.now();
+  const msgBubble = document.createElement('div');
+  msgBubble.className = 'msg-bubble own';
+  msgBubble.dataset.id = newMsgId;
+
+  // Replying header if active
+  let replyHeaderHtml = '';
+  if (activeReplyTarget) {
+    replyHeaderHtml = `
+      <div class="quoted-reply-box" data-target-id="${activeReplyTarget.id}" style="padding: 6px 10px; margin-bottom: 6px; border-left: 3px solid var(--primary-color); background: rgba(0,0,0,0.15); border-radius: 8px; cursor: pointer;">
+        <div style="font-size: 11px; font-weight: 700; color: var(--primary-color);">${activeReplyTarget.sender}</div>
+        <div style="font-size: 12px; color: var(--text-muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 200px;">${escapeHtml(activeReplyTarget.text)}</div>
+      </div>
+    `;
+  }
+
+  // Image HTML (যদি ছবি সিলেক্ট করা থাকে)
+  let imageHtml = '';
+  if (selectedImageData) {
+    imageHtml = `<img src="${selectedImageData}" style="max-width: 100%; border-radius: 12px; margin-bottom: 6px; display: block;" />`;
+  }
+
+  const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  msgBubble.innerHTML = `
+    ${replyHeaderHtml}
+    ${imageHtml}
+    ${text ? `<div class="msg-text">${escapeHtml(text)}</div>` : ''}
+    <div class="msg-footer">${currentTime}</div>
+  `;
+
+  messagesContainer.appendChild(msgBubble);
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+  // Reset Input & Attach States
+  chatInput.value = '';
+  selectedImageData = null;
+  imageInput.value = '';
+  attachBtn.style.color = 'var(--text-color)';
+  clearReplyState();
+}
